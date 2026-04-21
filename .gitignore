@@ -1,5 +1,4 @@
 node_modules/
 dist/
-certs/
 *.log
 .DS_Store
