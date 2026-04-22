@@ -2,7 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.177.0/containers/typescript-node
 {
 	"name": "Open Home Foundation - API",
-	"image": "mcr.microsoft.com/devcontainers/typescript-node:22-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
 	"forwardPorts": [
 		443
 	],
