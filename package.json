@@ -1,5 +1,5 @@
 {
-  "name": "api.openhomefoundation.org",
+  "name": "web-api",
   "version": "0.0.1",
   "scripts": {
     "build": "nest build",
