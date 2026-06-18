@@ -54,14 +54,20 @@ jobs:
         env:
           TF_TOKEN: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
           VARSET_ID: ${{ secrets.TERRAFORM_CLOUD_VARSET_ID }}
+          VAR_KEY: web_api_image_tag
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           variable_id=$(curl -sSL \
             --header "Authorization: Bearer $TF_TOKEN" \
             --header "Content-Type: application/vnd.api+json" \
             --request GET \
-              "https://app.terraform.io/api/v2/varsets/$VARSET_ID" \
-              | jq -r '.data.relationships.vars.data[0] | .id')
+              "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars" \
+              | jq -r --arg k "$VAR_KEY" '.data[] | select(.attributes.key == $k) | .id')
+
+          if [ -z "$variable_id" ] || [ "$variable_id" = "null" ]; then
+            echo "::error::Variable '$VAR_KEY' not found in the configured variable set" >&2
+            exit 1
+          fi
 
           curl -sSL \
             --header "Authorization: Bearer $TF_TOKEN" \
