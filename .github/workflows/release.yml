@@ -1,0 +1,71 @@
+name: Release Action
+
+on:
+  release:
+    types:
+      - published
+
+concurrency:
+  group: '${{ github.workflow }}'
+  cancel-in-progress: true
+
+jobs:
+  deploy_container:
+    name: Deploy Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Get version number
+        id: version
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          version="${REF##*/}"
+          if ! echo "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release tag '$version' is not a valid semver tag (vX.Y.Z)" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Populate version.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          hash=$(git rev-parse HEAD)
+          echo "{\"version\": {\"hash\": \"$hash\", \"version\": \"$VERSION\"}}" > ./version.json
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          push: true
+          tags: "ghcr.io/${{ github.repository_owner }}/web-api:${{ steps.version.outputs.version }}"
+
+      - name: Update Terraform variable set
+        env:
+          TF_TOKEN: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
+          VARSET_ID: ${{ secrets.TERRAFORM_CLOUD_VARSET_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          variable_id=$(curl -sSL \
+            --header "Authorization: Bearer $TF_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+              "https://app.terraform.io/api/v2/varsets/$VARSET_ID" \
+              | jq -r '.data.relationships.vars.data[0] | .id')
+
+          curl -sSL \
+            --header "Authorization: Bearer $TF_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request PATCH \
+            --data "$(jq -n --arg v "$VERSION" '{data: {type: "vars", attributes: {value: $v}}}')" \
+              "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars/$variable_id"
