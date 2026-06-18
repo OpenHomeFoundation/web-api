@@ -69,3 +69,52 @@ jobs:
             --request PATCH \
             --data "$(jq -n --arg v "$VERSION" '{data: {type: "vars", attributes: {value: $v}}}')" \
               "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars/$variable_id"
+
+      - name: Trigger Terraform apply
+        env:
+          TF_TOKEN: ${{ secrets.TERRAFORM_CLOUD_TOKEN }}
+          TF_ORG: ohf
+          TF_WORKSPACE: web-api
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The variable set update above does not queue a run on its own, so we
+          # create one explicitly and let Terraform Cloud apply it without manual
+          # confirmation. web-api is its own workspace/state, so this only
+          # deploys web-api — shared infrastructure is untouched.
+          workspace_id=$(curl -sSL \
+            --header "Authorization: Bearer $TF_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+              "https://app.terraform.io/api/v2/organizations/$TF_ORG/workspaces/$TF_WORKSPACE" \
+              | jq -r '.data.id')
+
+          if [ -z "$workspace_id" ] || [ "$workspace_id" = "null" ]; then
+            echo "::error::Could not resolve Terraform Cloud workspace '$TF_WORKSPACE'" >&2
+            exit 1
+          fi
+
+          run_id=$(curl -sSL \
+            --header "Authorization: Bearer $TF_TOKEN" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request POST \
+            --data "$(jq -n --arg ws "$workspace_id" --arg v "$VERSION" '{
+              data: {
+                type: "runs",
+                attributes: {
+                  message: "Deploy web-api \($v) (release action)",
+                  "auto-apply": true
+                },
+                relationships: {
+                  workspace: { data: { type: "workspaces", id: $ws } }
+                }
+              }
+            }')" \
+              "https://app.terraform.io/api/v2/runs" \
+              | jq -r '.data.id')
+
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "::error::Failed to create Terraform Cloud run" >&2
+            exit 1
+          fi
+
+          echo "Triggered Terraform Cloud run $run_id (auto-apply) for $TF_WORKSPACE"
