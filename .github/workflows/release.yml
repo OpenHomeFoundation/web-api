@@ -82,7 +82,10 @@ jobs:
             exit 1
           fi
 
-          curl -sSL \
+          # Discard the response body: it echoes the full variable object (and
+          # would expose the value of any sensitive variable). --fail keeps a
+          # non-2xx from passing silently now that the body is dropped.
+          curl -sSL --fail -o /dev/null \
             --header "Authorization: Bearer $TF_TOKEN" \
             --header "Content-Type: application/vnd.api+json" \
             --request PATCH \
