@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.4...v0.0.5) (2026-06-23)
+
+
+### Bug Fixes
+
+* **docker:** approve ignored build scripts for pnpm v11 ([#7](https://github.com/OpenHomeFoundation/web-api/issues/7)) ([4d5f2ca](https://github.com/OpenHomeFoundation/web-api/commit/4d5f2ca9024a92095ac4fe01ea1e31b776404ffa))
+
 ## [0.0.4](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.3...v0.0.4) (2026-06-23)
 
 
