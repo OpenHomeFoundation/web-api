@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.3...v0.0.4) (2026-06-23)
+
+
+### Bug Fixes
+
+* **ci:** lowercase image owner in ghcr tag ([#5](https://github.com/OpenHomeFoundation/web-api/issues/5)) ([8010114](https://github.com/OpenHomeFoundation/web-api/commit/8010114a08a5a5ebf3c1e2e017ff2e32b5a9ee72))
+
 ## [0.0.3](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.2...v0.0.3) (2026-06-23)
 
 
