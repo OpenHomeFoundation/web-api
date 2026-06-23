@@ -1,0 +1,6 @@
+# pnpm v10.26+/v11 reviews dependency build scripts and fails the install
+# (ERR_PNPM_IGNORED_BUILDS) on any that haven't been explicitly reviewed.
+# @nestjs/core's only postinstall is an Open Collective funding banner
+# (`opencollective || exit 0`), so we acknowledge it and skip it.
+allowBuilds:
+  "@nestjs/core": false
