@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.5...v0.1.0) (2026-06-23)
+
+
+### Features
+
+* **health:** add health and version endpoints ([#14](https://github.com/OpenHomeFoundation/web-api/issues/14)) ([add57ad](https://github.com/OpenHomeFoundation/web-api/commit/add57adc0d545fffa1463c2ca26a28711dc903ac))
+
 ## [0.0.5](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.4...v0.0.5) (2026-06-23)
 
 
