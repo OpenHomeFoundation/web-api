@@ -7,12 +7,12 @@ export class LivestreamController {
   constructor(private readonly livestream: LivestreamService) {}
 
   @Get()
-  getAll(): Promise<LivestreamInfo[]> {
+  getAll(): LivestreamInfo[] {
     return this.livestream.getAll();
   }
 
   @Get(':slug')
-  getStatus(@Param('slug') slug: string): Promise<LivestreamInfo> {
+  getStatus(@Param('slug') slug: string): LivestreamInfo {
     return this.livestream.getStatus(slug);
   }
 }
