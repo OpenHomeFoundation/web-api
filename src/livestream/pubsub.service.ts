@@ -89,6 +89,7 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params,
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       throw new Error(`Hub responded ${res.status}`);
