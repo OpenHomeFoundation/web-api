@@ -102,7 +102,7 @@ export class LivestreamService {
         return cached.info;
       }
       this.logger.error(
-        `Failed to fetch livestream status for ${slug}: ${err}`,
+        `Failed to fetch livestream status for ${slug}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
       );
       throw new ServiceUnavailableException(
         'Unable to fetch livestream status from YouTube',
