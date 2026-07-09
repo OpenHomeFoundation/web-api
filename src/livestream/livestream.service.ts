@@ -97,7 +97,7 @@ export class LivestreamService {
     } catch (err) {
       if (cached) {
         this.logger.warn(
-          `Refresh failed for ${slug}, serving stale data: ${err}`,
+          `Refresh failed for ${slug}, serving stale data: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
         );
         return cached.info;
       }
