@@ -22,6 +22,9 @@ const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/g;
 /** Cap videos processed per push to bound quota/CPU on oversized payloads. */
 const MAX_VIDEO_IDS = 50;
 
+const stackOf = (err: unknown): string =>
+  err instanceof Error ? (err.stack ?? err.message) : String(err);
+
 /**
  * WebSub (PubSubHubbub) callback for YouTube push notifications.
  * https://developers.google.com/youtube/v3/guides/push_notifications
@@ -70,7 +73,7 @@ export class PubSubController {
     // Fire-and-forget: acknowledge the hub quickly.
     void this.livestream
       .handleNotification(channelId, videoIds)
-      .catch((err) => this.logger.error(`Failed to handle push: ${err}`));
+      .catch((err) => this.logger.error('Failed to handle push', stackOf(err)));
   }
 
   private verifySignature(

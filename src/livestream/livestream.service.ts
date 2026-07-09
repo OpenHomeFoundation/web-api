@@ -51,6 +51,9 @@ const watchUrl = (videoId: string) =>
 
 const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/g;
 
+const stackOf = (err: unknown): string =>
+  err instanceof Error ? (err.stack ?? err.message) : String(err);
+
 @Injectable()
 export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LivestreamService.name);
@@ -63,6 +66,10 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private readonly tracked = new Map<string, Map<string, TrackedVideo>>();
   private readonly channelIds = new Map<string, string>();
   private readonly slugByChannelId = new Map<string, string>();
+  /** In-flight channel-ID resolutions, to de-duplicate concurrent lookups. */
+  private readonly channelIdPromises = new Map<string, Promise<string>>();
+  /** Stable timestamp used for channels that have no state yet. */
+  private readonly startedAt = new Date().toISOString();
   private reconcileTimer?: ReturnType<typeof setInterval>;
   private discoveryTimer?: ReturnType<typeof setInterval>;
   private tickCount = 0;
@@ -109,6 +116,19 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     if (cached) {
       return cached;
     }
+    // De-duplicate concurrent resolutions (e.g. discovery + subscription on
+    // startup) so they share a single channels.list request.
+    let pending = this.channelIdPromises.get(channel.slug);
+    if (!pending) {
+      pending = this.fetchChannelId(channel).finally(() =>
+        this.channelIdPromises.delete(channel.slug),
+      );
+      this.channelIdPromises.set(channel.slug, pending);
+    }
+    return pending;
+  }
+
+  private async fetchChannelId(channel: Channel): Promise<string> {
     const data = await this.apiGet('channels', {
       part: 'id',
       forHandle: channel.handle,
@@ -151,7 +171,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       channel: channel.slug,
       channelName: channel.name,
       status: 'none',
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.startedAt,
     };
   }
 
@@ -169,7 +189,10 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       await Promise.all(
         CHANNELS.map((channel) =>
           this.discoverChannel(channel).catch((err) =>
-            this.logger.error(`Discovery failed for ${channel.slug}: ${err}`),
+            this.logger.error(
+              `Discovery failed for ${channel.slug}`,
+              stackOf(err),
+            ),
           ),
         ),
       );
@@ -280,7 +303,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
         this.recompute(slug);
       }
     } catch (err) {
-      this.logger.warn(`Reconcile failed: ${err}`);
+      this.logger.warn(`Reconcile failed: ${stackOf(err)}`);
     }
   }
 

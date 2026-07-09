@@ -15,6 +15,9 @@ const LEASE_SECONDS = 432000;
 /** Re-subscribe before the lease expires. */
 const RENEW_INTERVAL_MS = 4 * 24 * 60 * 60 * 1000;
 
+const stackOf = (err: unknown): string =>
+  err instanceof Error ? (err.stack ?? err.message) : String(err);
+
 /**
  * Manages WebSub (PubSubHubbub) subscriptions to each channel's YouTube feed so
  * we receive push notifications instead of polling.
@@ -61,7 +64,7 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.subscribeAll(baseUrl);
     } catch (err) {
-      this.logger.error(`Subscription refresh failed: ${err}`);
+      this.logger.error('Subscription refresh failed', stackOf(err));
     }
   }
 
@@ -75,7 +78,7 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
           await this.subscribe(feedUrl(channelId), callback, secret);
           this.logger.log(`Subscribed to ${channel.slug}`);
         } catch (err) {
-          this.logger.error(`Subscribe failed for ${channel.slug}: ${err}`);
+          this.logger.error(`Subscribe failed for ${channel.slug}`, stackOf(err));
         }
       }),
     );
