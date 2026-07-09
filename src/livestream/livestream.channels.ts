@@ -25,3 +25,12 @@ export const CHANNELS: readonly Channel[] = [
     handle: 'musicassistantio',
   },
 ];
+
+/**
+ * Canonical YouTube channel RSS feed URL, used both as the discovery source and
+ * as the WebSub (PubSubHubbub) subscription topic — keep a single form so the
+ * two code paths cannot drift. This is the URL documented for the hub topic:
+ * https://developers.google.com/youtube/v3/guides/push_notifications
+ */
+export const feedUrl = (channelId: string): string =>
+  `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;

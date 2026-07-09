@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { Channel, CHANNELS } from './livestream.channels';
+import { Channel, CHANNELS, feedUrl } from './livestream.channels';
 
 export type LivestreamStatus = 'live' | 'upcoming' | 'past' | 'none';
 
@@ -357,10 +357,9 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
 
   /** Fetch recent video IDs from a channel's RSS feed (free, no quota). */
   private async fetchFeedVideoIds(channelId: string): Promise<string[]> {
-    const res = await fetch(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
+    const res = await fetch(feedUrl(channelId), {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       throw new Error(`Feed request failed: ${res.status}`);
     }

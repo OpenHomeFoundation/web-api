@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { CHANNELS } from './livestream.channels';
+import { CHANNELS, feedUrl } from './livestream.channels';
 import { LivestreamService } from './livestream.service';
 
 const HUB_URL = 'https://pubsubhubbub.appspot.com/subscribe';
@@ -14,9 +14,6 @@ const HUB_URL = 'https://pubsubhubbub.appspot.com/subscribe';
 const LEASE_SECONDS = 432000;
 /** Re-subscribe before the lease expires. */
 const RENEW_INTERVAL_MS = 4 * 24 * 60 * 60 * 1000;
-
-const topicUrl = (channelId: string) =>
-  `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}`;
 
 /**
  * Manages WebSub (PubSubHubbub) subscriptions to each channel's YouTube feed so
@@ -61,7 +58,7 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
       CHANNELS.map(async (channel) => {
         try {
           const channelId = await this.livestream.resolveChannelId(channel);
-          await this.subscribe(topicUrl(channelId), callback, secret);
+          await this.subscribe(feedUrl(channelId), callback, secret);
           this.logger.log(`Subscribed to ${channel.slug}`);
         } catch (err) {
           this.logger.error(`Subscribe failed for ${channel.slug}: ${err}`);
