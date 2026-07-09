@@ -1,6 +1,7 @@
 {
   "name": "web-api",
   "version": "0.1.0",
+  "packageManager": "pnpm@11.10.0",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -25,6 +26,6 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^7.0.0"
+    "typescript": "^5.9.3"
   }
 }

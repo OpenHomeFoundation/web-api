@@ -4,3 +4,8 @@
 # (`opencollective || exit 0`), so we acknowledge it and skip it.
 allowBuilds:
   "@nestjs/core": false
+
+# Refuse to install any package version published less than 7 days ago
+# (10080 minutes), mitigating supply-chain attacks that rely on freshly
+# published malicious releases being picked up immediately.
+minimumReleaseAge: 10080

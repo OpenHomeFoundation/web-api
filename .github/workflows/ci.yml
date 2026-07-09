@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  # Also run on pushes to main so the default branch always has a green (or red)
+  # signal, independent of the release-triggered container build.
+  push:
+    branches: [main]
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker_build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # Build the image exactly as the release workflow does, but for a single
+      # native platform and without pushing. This exercises the frozen pnpm
+      # installs and `nest build`, catching dependency, lockfile-cooldown and
+      # compiler-compatibility breakage before it reaches a published release.
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
