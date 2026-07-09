@@ -235,9 +235,12 @@ export class LivestreamService {
       url.searchParams.set(name, value);
     }
     url.searchParams.set('key', key);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) {
-      throw new Error(`YouTube API ${path} request failed: ${res.status}`);
+      const body = await res.text().catch(() => '');
+      throw new Error(
+        `YouTube API ${path} request failed: ${res.status} ${res.statusText}${body ? ` - ${body}` : ''}`,
+      );
     }
     return res.json();
   }
