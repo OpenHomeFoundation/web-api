@@ -54,7 +54,23 @@ export class LivestreamService {
   constructor(private readonly config: ConfigService) {}
 
   async getAll(): Promise<LivestreamInfo[]> {
-    return Promise.all(CHANNELS.map((channel) => this.getStatus(channel.slug)));
+    return Promise.all(
+      CHANNELS.map(async (channel) => {
+        try {
+          return await this.getStatus(channel.slug);
+        } catch (err) {
+          this.logger.warn(
+            `Failed to fetch livestream status for ${channel.slug}, returning status "none": ${err}`,
+          );
+          return {
+            channel: channel.slug,
+            channelName: channel.name,
+            status: 'none',
+            fetchedAt: new Date().toISOString(),
+          };
+        }
+      }),
+    );
   }
 
   async getStatus(slug: string): Promise<LivestreamInfo> {
