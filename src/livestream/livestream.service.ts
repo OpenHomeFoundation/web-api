@@ -66,6 +66,8 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private reconcileTimer?: ReturnType<typeof setInterval>;
   private discoveryTimer?: ReturnType<typeof setInterval>;
   private tickCount = 0;
+  private discoveryRunning = false;
+  private reconcileRunning = false;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -159,13 +161,21 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
    * newly scheduled streams that WebSub may not push.
    */
   private async discovery(): Promise<void> {
-    await Promise.all(
-      CHANNELS.map((channel) =>
-        this.discoverChannel(channel).catch((err) =>
-          this.logger.error(`Discovery failed for ${channel.slug}: ${err}`),
+    if (this.discoveryRunning) {
+      return;
+    }
+    this.discoveryRunning = true;
+    try {
+      await Promise.all(
+        CHANNELS.map((channel) =>
+          this.discoverChannel(channel).catch((err) =>
+            this.logger.error(`Discovery failed for ${channel.slug}: ${err}`),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      this.discoveryRunning = false;
+    }
   }
 
   private async discoverChannel(channel: Channel): Promise<void> {
@@ -186,11 +196,42 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
    * cost effectively no quota.
    */
   private async tick(): Promise<void> {
+    // Evict streams whose past-window has elapsed, even when nothing is active.
+    this.pruneExpired();
     this.tickCount = (this.tickCount + 1) % IDLE_TICKS;
     if (!this.hasActiveStream() && this.tickCount !== 0) {
       return;
     }
-    await this.reconcile();
+    if (this.reconcileRunning) {
+      return;
+    }
+    this.reconcileRunning = true;
+    try {
+      await this.reconcile();
+    } finally {
+      this.reconcileRunning = false;
+    }
+  }
+
+  /** Drop tracked "past" streams older than the window and recompute state. */
+  private pruneExpired(): void {
+    const now = Date.now();
+    for (const [slug, videos] of this.tracked) {
+      let changed = false;
+      for (const [videoId, v] of videos) {
+        if (
+          v.status === 'past' &&
+          v.actualEndTime &&
+          now - Date.parse(v.actualEndTime) > PAST_WINDOW_MS
+        ) {
+          videos.delete(videoId);
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.recompute(slug);
+      }
+    }
   }
 
   private hasActiveStream(): boolean {

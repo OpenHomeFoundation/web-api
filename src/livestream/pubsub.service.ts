@@ -38,9 +38,14 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
-    void this.subscribeAll(baseUrl);
+    if (!this.config.get<string>('PUBSUB_SECRET')) {
+      this.logger.warn(
+        'PUBSUB_SECRET not set — /pubsub will accept unsigned notifications.',
+      );
+    }
+    void this.runSubscribeAll(baseUrl);
     this.renewTimer = setInterval(
-      () => void this.subscribeAll(baseUrl),
+      () => void this.runSubscribeAll(baseUrl),
       RENEW_INTERVAL_MS,
     );
   }
@@ -48,6 +53,15 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     if (this.renewTimer) {
       clearInterval(this.renewTimer);
+    }
+  }
+
+  /** subscribeAll wrapper that never rejects (e.g. invalid PUBLIC_BASE_URL). */
+  private async runSubscribeAll(baseUrl: string): Promise<void> {
+    try {
+      await this.subscribeAll(baseUrl);
+    } catch (err) {
+      this.logger.error(`Subscription refresh failed: ${err}`);
     }
   }
 

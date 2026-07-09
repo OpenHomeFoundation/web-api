@@ -19,6 +19,8 @@ import { LivestreamService } from './livestream.service';
 
 const channelIdPattern = /<yt:channelId>([^<]+)<\/yt:channelId>/;
 const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/g;
+/** Cap videos processed per push to bound quota/CPU on oversized payloads. */
+const MAX_VIDEO_IDS = 50;
 
 /**
  * WebSub (PubSubHubbub) callback for YouTube push notifications.
@@ -51,13 +53,16 @@ export class PubSubController {
   @Post()
   @HttpCode(204)
   notify(@Req() req: RawBodyRequest<IncomingMessage>): void {
-    const raw = req.rawBody?.toString('utf8') ?? '';
-    if (!this.verifySignature(req, raw)) {
+    const rawBody = req.rawBody;
+    if (!this.verifySignature(req, rawBody)) {
       throw new ForbiddenException('Invalid signature');
     }
 
-    const channelId = channelIdPattern.exec(raw)?.[1];
-    const videoIds = [...raw.matchAll(videoIdPattern)].map((m) => m[1]);
+    const xml = rawBody?.toString('utf8') ?? '';
+    const channelId = channelIdPattern.exec(xml)?.[1];
+    const videoIds = [...xml.matchAll(videoIdPattern)]
+      .map((m) => m[1])
+      .slice(0, MAX_VIDEO_IDS);
     if (!channelId || videoIds.length === 0) {
       return;
     }
@@ -70,11 +75,15 @@ export class PubSubController {
 
   private verifySignature(
     req: RawBodyRequest<IncomingMessage>,
-    raw: string,
+    rawBody: Buffer | undefined,
   ): boolean {
     const secret = this.config.get<string>('PUBSUB_SECRET');
     if (!secret) {
       return true; // Verification disabled when no secret configured.
+    }
+    // A secret is configured but we have no raw bytes to verify — fail closed.
+    if (!rawBody) {
+      return false;
     }
     const header = req.headers['x-hub-signature'];
     const value = Array.isArray(header) ? header[0] : header;
@@ -83,7 +92,7 @@ export class PubSubController {
       return false;
     }
     try {
-      const expected = createHmac('sha1', secret).update(raw).digest();
+      const expected = createHmac('sha1', secret).update(rawBody).digest();
       const provided = Buffer.from(signature, 'hex');
       return (
         provided.length === expected.length &&
