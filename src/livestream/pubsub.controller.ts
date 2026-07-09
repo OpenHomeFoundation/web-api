@@ -79,12 +79,18 @@ export class PubSubController {
     const header = req.headers['x-hub-signature'];
     const value = Array.isArray(header) ? header[0] : header;
     const [algo, signature] = value?.split('=') ?? [];
-    if (!algo || !signature) {
+    if (algo !== 'sha1' || !signature) {
       return false;
     }
-    const expected = createHmac(algo, secret).update(raw).digest('hex');
-    const a = Buffer.from(signature);
-    const b = Buffer.from(expected);
-    return a.length === b.length && timingSafeEqual(a, b);
+    try {
+      const expected = createHmac('sha1', secret).update(raw).digest();
+      const provided = Buffer.from(signature, 'hex');
+      return (
+        provided.length === expected.length &&
+        timingSafeEqual(provided, expected)
+      );
+    } catch {
+      return false;
+    }
   }
 }
