@@ -54,23 +54,43 @@ export class LivestreamService {
   constructor(private readonly config: ConfigService) {}
 
   async getAll(): Promise<LivestreamInfo[]> {
-    return Promise.all(
-      CHANNELS.map(async (channel) => {
-        try {
-          return await this.getStatus(channel.slug);
-        } catch (err) {
-          this.logger.warn(
-            `Failed to fetch livestream status for ${channel.slug}, returning status "none": ${err}`,
-          );
-          return {
-            channel: channel.slug,
-            channelName: channel.name,
-            status: 'none',
-            fetchedAt: new Date().toISOString(),
-          };
-        }
-      }),
+    const results = await Promise.allSettled(
+      CHANNELS.map((channel) => this.getStatus(channel.slug)),
     );
+
+    const infos: LivestreamInfo[] = [];
+    let failures = 0;
+
+    for (let i = 0; i < results.length; i++) {
+      const channel = CHANNELS[i];
+      const res = results[i];
+
+      if (res.status === 'fulfilled') {
+        infos.push(res.value);
+        continue;
+      }
+
+      failures++;
+      this.logger.warn(
+        `Failed to fetch livestream status for ${channel.slug}, returning status "none": ${res.reason instanceof Error ? res.reason.stack ?? res.reason.message : String(res.reason)}`,
+      );
+      infos.push({
+        channel: channel.slug,
+        channelName: channel.name,
+        status: 'none',
+        fetchedAt: new Date().toISOString(),
+      });
+    }
+
+    // If nothing could be fetched (and thus nothing could be served from cache),
+    // return an error instead of silently reporting "none" for every channel.
+    if (failures === CHANNELS.length) {
+      throw new ServiceUnavailableException(
+        'Unable to fetch livestream status from YouTube',
+      );
+    }
+
+    return infos;
   }
 
   async getStatus(slug: string): Promise<LivestreamInfo> {
