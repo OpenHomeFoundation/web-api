@@ -3,11 +3,10 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    rawBody: true,
-  });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // YouTube WebSub pushes arrive as Atom XML; register a raw parser for those
-  // content types so `req.rawBody` is populated for signature verification.
+  // content types so the /pubsub handler receives the exact bytes (needed for
+  // HMAC signature verification).
   app.useBodyParser('raw', {
     type: ['application/atom+xml', 'application/xml', 'text/xml'],
   });

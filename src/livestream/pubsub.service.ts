@@ -43,8 +43,11 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
     }
     if (!this.config.get<string>('PUBSUB_SECRET')) {
       this.logger.warn(
-        'PUBSUB_SECRET not set — /pubsub will accept unsigned notifications.',
+        'PUBSUB_SECRET not set — skipping push subscriptions ' +
+          '(the /pubsub webhook rejects unsigned pushes). ' +
+          'Status will only update from the periodic reconcile.',
       );
+      return;
     }
     void this.runSubscribeAll(baseUrl);
     this.renewTimer = setInterval(

@@ -1,17 +1,17 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { IncomingMessage } from 'node:http';
 
 import {
+  BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
   Header,
+  Headers,
   HttpCode,
   Logger,
   Post,
   Query,
-  RawBodyRequest,
-  Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -44,7 +44,7 @@ export class PubSubController {
   verify(@Query() query: Record<string, string>): string {
     const challenge = query['hub.challenge'];
     if (!challenge) {
-      throw new ForbiddenException('Missing hub.challenge');
+      throw new BadRequestException('Missing hub.challenge');
     }
     this.logger.log(
       `Verified ${query['hub.mode']} for ${query['hub.topic']}`,
@@ -55,20 +55,21 @@ export class PubSubController {
   /** Content-distribution notification with an Atom feed payload. */
   @Post()
   @HttpCode(204)
-  notify(@Req() req: RawBodyRequest<IncomingMessage>): void {
+  notify(
+    @Body() body: Buffer,
+    @Headers('x-hub-signature') signature?: string,
+  ): void {
     const secret = this.config.get<string>('PUBSUB_SECRET');
     // Fail closed: without a shared secret we can't authenticate the sender,
     // so refuse to do any (quota-costing) work for unauthenticated callers.
     if (!secret) {
       throw new ForbiddenException('PUBSUB_SECRET not configured');
     }
-
-    const rawBody = req.rawBody;
-    if (!this.verifySignature(secret, req, rawBody)) {
+    if (!this.verifySignature(secret, signature, body)) {
       throw new ForbiddenException('Invalid signature');
     }
 
-    const xml = rawBody?.toString('utf8') ?? '';
+    const xml = Buffer.isBuffer(body) ? body.toString('utf8') : '';
     const channelId = channelIdPattern.exec(xml)?.[1];
     const videoIds = [...xml.matchAll(videoIdPattern)]
       .map((m) => m[1])
@@ -85,21 +86,19 @@ export class PubSubController {
 
   private verifySignature(
     secret: string,
-    req: RawBodyRequest<IncomingMessage>,
-    rawBody: Buffer | undefined,
+    signatureHeader: string | undefined,
+    body: Buffer,
   ): boolean {
-    // A secret is configured but we have no raw bytes to verify — fail closed.
-    if (!rawBody) {
+    // No raw bytes to verify (wrong/missing parser) — fail closed.
+    if (!Buffer.isBuffer(body)) {
       return false;
     }
-    const header = req.headers['x-hub-signature'];
-    const value = Array.isArray(header) ? header[0] : header;
-    const [algo, signature] = value?.split('=') ?? [];
+    const [algo, signature] = signatureHeader?.split('=') ?? [];
     if (algo !== 'sha1' || !signature) {
       return false;
     }
     try {
-      const expected = createHmac('sha1', secret).update(rawBody).digest();
+      const expected = createHmac('sha1', secret).update(body).digest();
       const provided = Buffer.from(signature, 'hex');
       return (
         provided.length === expected.length &&
