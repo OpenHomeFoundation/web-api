@@ -188,12 +188,17 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     try {
       await Promise.all(
         CHANNELS.map((channel) =>
-          this.discoverChannel(channel).catch((err) =>
+          this.discoverChannel(channel).catch((err) => {
             this.logger.error(
               `Discovery failed for ${channel.slug}`,
               stackOf(err),
-            ),
-          ),
+            );
+            // Ensure the channel still has a deterministic state entry so the
+            // API doesn't fall back to a fresh defaultInfo on every request.
+            if (!this.state.has(channel.slug)) {
+              this.state.set(channel.slug, this.defaultInfo(channel));
+            }
+          }),
         ),
       );
     } finally {

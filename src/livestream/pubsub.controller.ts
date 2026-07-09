@@ -56,8 +56,15 @@ export class PubSubController {
   @Post()
   @HttpCode(204)
   notify(@Req() req: RawBodyRequest<IncomingMessage>): void {
+    const secret = this.config.get<string>('PUBSUB_SECRET');
+    // Fail closed: without a shared secret we can't authenticate the sender,
+    // so refuse to do any (quota-costing) work for unauthenticated callers.
+    if (!secret) {
+      throw new ForbiddenException('PUBSUB_SECRET not configured');
+    }
+
     const rawBody = req.rawBody;
-    if (!this.verifySignature(req, rawBody)) {
+    if (!this.verifySignature(secret, req, rawBody)) {
       throw new ForbiddenException('Invalid signature');
     }
 
@@ -77,13 +84,10 @@ export class PubSubController {
   }
 
   private verifySignature(
+    secret: string,
     req: RawBodyRequest<IncomingMessage>,
     rawBody: Buffer | undefined,
   ): boolean {
-    const secret = this.config.get<string>('PUBSUB_SECRET');
-    if (!secret) {
-      return true; // Verification disabled when no secret configured.
-    }
     // A secret is configured but we have no raw bytes to verify — fail closed.
     if (!rawBody) {
       return false;
