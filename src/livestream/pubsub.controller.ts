@@ -42,13 +42,27 @@ export class PubSubController {
   @Get()
   @Header('Content-Type', 'text/plain')
   verify(@Query() query: Record<string, string>): string {
+    const mode = query['hub.mode'];
+    const topic = query['hub.topic'];
     const challenge = query['hub.challenge'];
-    if (!challenge) {
-      throw new BadRequestException('Missing hub.challenge');
+
+    if (!mode || !topic || !challenge) {
+      throw new BadRequestException('Missing hub.mode, hub.topic, or hub.challenge');
     }
-    this.logger.log(
-      `Verified ${query['hub.mode']} for ${query['hub.topic']}`,
-    );
+
+    const expectedToken = this.config.get<string>('PUBSUB_VERIFY_TOKEN');
+    if (expectedToken && query['hub.verify_token'] !== expectedToken) {
+      throw new ForbiddenException('Invalid hub.verify_token');
+    }
+
+    if (mode !== 'subscribe' && mode !== 'unsubscribe') {
+      throw new BadRequestException(`Unsupported hub.mode "${mode}"`);
+    }
+    if (!topic.startsWith('https://www.youtube.com/feeds/videos.xml?channel_id=')) {
+      throw new BadRequestException('Unsupported hub.topic');
+    }
+
+    this.logger.log(`Verified ${mode} for ${topic}`);
     return challenge;
   }
 
