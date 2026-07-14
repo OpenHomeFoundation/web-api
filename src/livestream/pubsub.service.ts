@@ -99,6 +99,12 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
       'hub.verify': 'async',
       'hub.lease_seconds': String(LEASE_SECONDS),
     });
+
+    const verifyToken = this.config.get<string>('PUBSUB_VERIFY_TOKEN');
+    if (verifyToken) {
+      params.set('hub.verify_token', verifyToken);
+    }
+
     if (secret) {
       params.set('hub.secret', secret);
     }
