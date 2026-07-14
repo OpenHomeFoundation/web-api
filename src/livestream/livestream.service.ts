@@ -81,7 +81,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     // Seed initial state from each channel's (free) RSS feed so we are not
     // blank until the first push arrives.
-    await this.discovery();
+    void this.discovery();
     this.discoveryTimer = setInterval(
       () => void this.discovery(),
       DISCOVERY_INTERVAL_MS,
