@@ -284,9 +284,16 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   /** Re-check tracked upcoming/live videos to catch live/ended transitions. */
   private async reconcile(): Promise<void> {
     const active: string[] = [];
+    const now = Date.now();
     for (const videos of this.tracked.values()) {
       for (const v of videos.values()) {
-        if (v.status === 'live' || v.status === 'upcoming') {
+        if (v.status === 'live') {
+          active.push(v.videoId);
+        } else if (
+          v.status === 'upcoming' &&
+          v.scheduledStartTime &&
+          Date.parse(v.scheduledStartTime) - now <= SOON_WINDOW_MS
+        ) {
           active.push(v.videoId);
         }
       }
