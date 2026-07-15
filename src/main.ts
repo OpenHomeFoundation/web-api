@@ -9,6 +9,7 @@ async function bootstrap() {
   // HMAC signature verification).
   app.useBodyParser('raw', {
     type: ['application/atom+xml', 'application/xml', 'text/xml'],
+    limit: '1mb',
   });
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
