@@ -150,7 +150,15 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     channelId: string,
     videoIds: string[],
   ): Promise<void> {
-    const slug = this.slugByChannelId.get(channelId);
+    let slug = this.slugByChannelId.get(channelId);
+    if (!slug) {
+      // Pushes can arrive before initial channel-ID resolution; try to populate the
+      // channelId->slug mapping once before dropping the notification.
+      await Promise.all(
+        CHANNELS.map((c) => this.resolveChannelId(c).catch(() => undefined)),
+      );
+      slug = this.slugByChannelId.get(channelId);
+    }
     if (!slug) {
       this.logger.warn(`Notification for unknown channel ${channelId}`);
       return;
