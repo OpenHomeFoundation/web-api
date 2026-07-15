@@ -85,11 +85,11 @@ export class PubSubController {
 
     const xml = Buffer.isBuffer(body) ? body.toString('utf8') : '';
     const channelId = channelIdPattern.exec(xml)?.[1];
-const videoIds: string[] = [];
-for (const m of xml.matchAll(videoIdPattern)) {
-  videoIds.push(m[1]);
-  if (videoIds.length >= MAX_VIDEO_IDS) break;
-}
+    const videoIds: string[] = [];
+    for (const m of xml.matchAll(videoIdPattern)) {
+      videoIds.push(m[1]);
+      if (videoIds.length >= MAX_VIDEO_IDS) break;
+    }
     if (!channelId || videoIds.length === 0) {
       return;
     }
