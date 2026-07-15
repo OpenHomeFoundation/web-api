@@ -49,6 +49,13 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
+    if (!this.config.get<string>('YOUTUBE_API_KEY')) {
+      this.logger.warn(
+        'YOUTUBE_API_KEY not set — skipping push subscriptions. ' +
+          'Status will only update from the periodic reconcile.',
+      );
+      return;
+    }
     void this.runSubscribeAll(baseUrl);
     this.renewTimer = setInterval(
       () => void this.runSubscribeAll(baseUrl),
