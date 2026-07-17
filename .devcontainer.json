@@ -4,11 +4,11 @@
 	"name": "Open Home Foundation - API",
 	"image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
 	"forwardPorts": [
-		443
+		3000
 	],
 	"portsAttributes": {
-		"443": {
-			"label": "HTTPS server"
+		"3000": {
+			"label": "web-api (HTTP)"
 		}
 	},
 	"customizations": {
