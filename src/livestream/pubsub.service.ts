@@ -79,7 +79,10 @@ export class PubSubService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async subscribeAll(baseUrl: string): Promise<void> {
-    const callback = new URL('/pubsub', baseUrl).toString();
+    const callback = new URL(
+      'pubsub',
+      baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+    ).toString();
     const secret = this.config.get<string>('PUBSUB_SECRET');
     await Promise.all(
       CHANNELS.map(async (channel) => {
