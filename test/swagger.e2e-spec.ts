@@ -1,42 +1,10 @@
 import { Server } from 'node:http';
 
-import { INestApplication } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
-import { AppController } from '../src/app.controller';
-import { HealthModule } from '../src/health';
 import { getVersionInfo } from '../src/health/version';
-import { LivestreamModule } from '../src/livestream';
-import { SWAGGER_JSON_PATH, SWAGGER_PATH, setupSwagger } from '../src/main';
-
-/**
- * The channel list comes from configuration, so this suite owns it: the paths and
- * schemas asserted below are generated from the code, but the served document is
- * only reachable once the app boots, and booting needs a valid channel list.
- */
-const CHANNELS = 'FixtureAlpha:fixture-alpha';
-
-/**
- * Minimal stand-ins for the two upstreams the livestream service talks to on
- * startup: enough for discovery to complete without reaching the network.
- */
-const fetchStub = (input: unknown): Response => {
-  const url = new URL(String(input));
-  if (url.hostname === 'www.googleapis.com') {
-    return new Response(JSON.stringify({ items: [{ id: 'UCfixture' }] }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
-  return new Response(
-    '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" ' +
-      'xmlns="http://www.w3.org/2005/Atom"><title>Fixture Alpha</title></feed>',
-    { status: 200, headers: { 'content-type': 'application/atom+xml' } },
-  );
-};
+import { SWAGGER_JSON_PATH, SWAGGER_PATH } from '../src/main';
+import { TestApp, startTestApp } from './test-app.fixture';
 
 interface Schema {
   type?: string;
@@ -81,49 +49,20 @@ const okSchema = (operation: Operation): Schema | undefined =>
   operation.responses?.['200']?.content?.['application/json']?.schema;
 
 describe('Swagger (e2e)', () => {
-  let app: INestApplication;
+  let fixture: TestApp;
   let server: Server;
   let document: OpenApiDocument;
-  const originalFetch = globalThis.fetch;
 
   beforeAll(async () => {
-    // Stubbed before init() because the livestream service calls out on startup.
-    globalThis.fetch = jest.fn((input: unknown) =>
-      Promise.resolve(fetchStub(input)),
-    );
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          ignoreEnvFile: true,
-          load: [
-            () => ({
-              YOUTUBE_API_KEY: 'test-key',
-              LIVESTREAM_CHANNELS: CHANNELS,
-            }),
-          ],
-        }),
-        HealthModule.register({ version: getVersionInfo() }),
-        LivestreamModule,
-      ],
-      controllers: [AppController],
-    }).compile();
-
-    app = moduleRef.createNestApplication({ logger: false });
-    // Same order as bootstrap(): the spec is built from the app, then served.
-    setupSwagger(app);
-    await app.init();
-    server = app.getHttpServer();
+    fixture = await startTestApp();
+    server = fixture.server;
 
     const res = await request(server).get(`/${SWAGGER_JSON_PATH}`);
     document = res.body;
   }, 30_000);
 
   afterAll(async () => {
-    // Clears the discovery/reconcile intervals so Jest can exit cleanly.
-    await app?.close();
-    globalThis.fetch = originalFetch;
+    await fixture?.close();
   });
 
   describe(`GET /${SWAGGER_JSON_PATH}`, () => {

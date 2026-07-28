@@ -69,6 +69,7 @@ committed). In production these are set on the container.
 | --------------------- | -------- | ------------------------------------------------ |
 | `YOUTUBE_API_KEY`     | yes      | YouTube Data API v3 key, used to classify videos |
 | `LIVESTREAM_CHANNELS` | yes      | Channels to track, as `handle:slug` pairs        |
+| `CORS_ORIGINS`        | no       | Sites allowed to read the API from a browser     |
 | `PORT`                | no       | Listen port, defaults to `3000`                  |
 
 `LIVESTREAM_CHANNELS` is a comma-separated list of `handle:slug` pairs:
@@ -87,6 +88,21 @@ Display names are read from each channel's feed at runtime, so they are not
 configured. Adding or removing a project is a configuration change, not a code
 change. Malformed configuration fails startup rather than silently tracking
 nothing.
+
+`CORS_ORIGINS` is a comma-separated list of the origins allowed to read the API
+from a browser — the sites that consume it are deployed separately, so this is
+configuration too:
+
+```
+CORS_ORIGINS=https://www.home-assistant.io,https://esphome.io
+```
+
+Each entry is a scheme and host (with a port if it is not the default) and
+nothing else, since that is all a browser's `Origin` header carries. Use `*` on
+its own to allow any origin. Left unset, no cross-origin headers are sent: the
+API still answers every request, but a browser will not hand the response to a
+page on another site. As with the channel list, a malformed entry fails startup
+rather than quietly dropping a site that was meant to be allowed.
 
 ## How it works
 

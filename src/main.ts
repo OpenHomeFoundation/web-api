@@ -1,8 +1,10 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ANY_ORIGIN, CORS_ORIGINS_ENV, parseCorsOrigins } from './cors';
 import { getVersionInfo } from './health/version';
 
 /** Where the Swagger UI is served from. */
@@ -27,6 +29,48 @@ export const SWAGGER_JSON_PATH = `${SWAGGER_PATH}-json`;
  */
 export function setupSecurity(app: INestApplication): void {
   app.use(helmet());
+}
+
+/**
+ * Allow the origins named in CORS_ORIGINS to read this API from a browser.
+ *
+ * The consuming sites are deployed independently of this service, so who may
+ * call it is configuration rather than code: adding a site is an environment
+ * change. `*` opts every origin in.
+ *
+ * With nothing configured, no cross-origin headers are sent at all — the API
+ * still answers, but a browser on another site will not hand the response to the
+ * page that asked for it. That is deliberate: a deployment that has not said who
+ * may read it should not be guessed at.
+ */
+export function setupCors(
+  app: INestApplication,
+  raw: string | undefined,
+): void {
+  const logger = new Logger('Cors');
+  const origins = parseCorsOrigins(raw);
+
+  if (origins.length === 0) {
+    logger.warn(
+      `${CORS_ORIGINS_ENV} is not set — no origin can read this API from a browser`,
+    );
+    return;
+  }
+
+  const anyOrigin = origins[0] === ANY_ORIGIN;
+  app.enableCors({
+    // A list is matched against the request's Origin and echoed back, which is
+    // why it cannot be collapsed into the "*" case: that sends a literal "*".
+    origin: anyOrigin ? ANY_ORIGIN : origins,
+    // Every endpoint here is a read, so no other method needs advertising.
+    methods: ['GET'],
+  });
+
+  logger.log(
+    anyOrigin
+      ? 'Cross-origin reads allowed from any origin'
+      : `Cross-origin reads allowed from ${origins.join(', ')}`,
+  );
 }
 
 /**
@@ -58,6 +102,8 @@ export function setupSwagger(app: INestApplication): void {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   setupSecurity(app);
+  // Read through ConfigService so a value from .env is picked up like any other.
+  setupCors(app, app.get(ConfigService).get<string>(CORS_ORIGINS_ENV));
   setupSwagger(app);
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
