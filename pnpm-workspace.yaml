@@ -5,8 +5,12 @@
 # unrs-resolver (transitive, via jest-resolve) runs napi-postinstall to link a
 # native binding. The prebuilt platform binary arrives as an optional
 # dependency, so resolution works without running the script.
+# @scarf/scarf (transitive, via @nestjs/swagger) reports installation analytics
+# to a third party on postinstall. Nothing depends on it running, so it is
+# skipped rather than allowed to phone home from developer machines and CI.
 allowBuilds:
-  "@nestjs/core": false
+  '@nestjs/core': false
+  '@scarf/scarf': false
   unrs-resolver: false
 
 # Refuse to install any package version published less than 7 days ago

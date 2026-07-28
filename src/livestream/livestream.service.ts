@@ -87,18 +87,21 @@ const XML_ENTITIES: Record<string, string> = {
  * an escaped entity ("&amp;amp;") decodes to "&amp;" rather than "&".
  */
 const decodeXmlText = (value: string): string =>
-  value.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g, (match, ref: string) => {
-    if (!ref.startsWith('#')) {
-      return XML_ENTITIES[ref.toLowerCase()] ?? match;
-    }
-    const code =
-      ref[1] === 'x' || ref[1] === 'X'
-        ? parseInt(ref.slice(2), 16)
-        : parseInt(ref.slice(1), 10);
-    return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
-      ? String.fromCodePoint(code)
-      : match;
-  });
+  value.replace(
+    /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g,
+    (match, ref: string) => {
+      if (!ref.startsWith('#')) {
+        return XML_ENTITIES[ref.toLowerCase()] ?? match;
+      }
+      const code =
+        ref[1] === 'x' || ref[1] === 'X'
+          ? parseInt(ref.slice(2), 16)
+          : parseInt(ref.slice(1), 10);
+      return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : match;
+    },
+  );
 
 const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
@@ -133,15 +136,19 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     this.channelsBySlug = new Map(this.channels.map((c) => [c.slug, c]));
   }
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     // Seed initial state from each channel's (free) RSS feed so the API is not
-    // blank until the first scheduled discovery sweep.
+    // blank until the first scheduled discovery sweep. Deliberately not awaited:
+    // startup must not block on YouTube being reachable.
     void this.discovery();
     this.discoveryTimer = setInterval(
       () => void this.discovery(),
       DISCOVERY_INTERVAL_MS,
     );
-    this.reconcileTimer = setInterval(() => void this.tick(), RECONCILE_TICK_MS);
+    this.reconcileTimer = setInterval(
+      () => void this.tick(),
+      RECONCILE_TICK_MS,
+    );
   }
 
   onModuleDestroy(): void {
@@ -322,7 +329,9 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
    *
    * Returns the slugs whose tracked videos changed.
    */
-  private async refresh(slugByVideoId: Map<string, string>): Promise<Set<string>> {
+  private async refresh(
+    slugByVideoId: Map<string, string>,
+  ): Promise<Set<string>> {
     const touched = new Set<string>();
     const unreturned = new Map(slugByVideoId);
     const items = await this.videoDetails([...slugByVideoId.keys()]);
@@ -342,7 +351,9 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
 
     for (const [videoId, slug] of unreturned) {
       if (this.tracked.get(slug)?.delete(videoId)) {
-        this.logger.log(`Untracked ${videoId}: no longer served by videos.list`);
+        this.logger.log(
+          `Untracked ${videoId}: no longer served by videos.list`,
+        );
         touched.add(slug);
       }
     }
@@ -577,7 +588,10 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     for (const [, entry] of xml.matchAll(entryPattern)) {
       const videoId = videoIdPattern.exec(entry)?.[1];
       if (videoId) {
-        entries.push({ videoId, updated: updatedPattern.exec(entry)?.[1] ?? '' });
+        entries.push({
+          videoId,
+          updated: updatedPattern.exec(entry)?.[1] ?? '',
+        });
       }
     }
 

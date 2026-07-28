@@ -9,8 +9,10 @@ export interface HealthControllerConfigParams {
   extraHealthData?: () => Promise<Record<string, any>>;
 }
 
-export interface HealthModuleAsyncParams
-  extends Pick<ModuleMetadata, 'imports' | 'providers'> {
+export interface HealthModuleAsyncParams extends Pick<
+  ModuleMetadata,
+  'imports' | 'providers'
+> {
   useFactory: (
     ...args: any[]
   ) => HealthControllerConfigParams | Promise<HealthControllerConfigParams>;

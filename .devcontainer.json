@@ -1,34 +1,39 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.177.0/containers/typescript-node
 {
-	"name": "Open Home Foundation - API",
-	"image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
-	"forwardPorts": [
-		3000
-	],
-	"portsAttributes": {
-		"3000": {
-			"label": "web-api (HTTP)"
-		}
-	},
-	"customizations": {
-		"vscode": {
-			"settings": {
-				"files.eol": "\n",
-				"editor.tabSize": 2,
-				"editor.formatOnPaste": false,
-				"editor.formatOnSave": true,
-				"editor.formatOnType": true,
-				"[typescript]": {
-					"editor.defaultFormatter": "esbenp.prettier-vscode"
-				},
-				"[javascript]": {
-					"editor.defaultFormatter": "esbenp.prettier-vscode"
-				},
-				"files.trimTrailingWhitespace": true
-			}
-		}
-	},
-	"postCreateCommand": "pnpm install",
-	"remoteUser": "node"
+  "name": "Open Home Foundation - API",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "web-api (HTTP)"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "files.eol": "\n",
+        "editor.tabSize": 2,
+        "editor.formatOnPaste": false,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "files.trimTrailingWhitespace": true
+      },
+      // The settings above name Prettier as the formatter and the project lints
+      // with ESLint, so both extensions have to actually be present.
+      "extensions": ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"]
+    }
+  },
+  // mise runs this project's tasks, so the container needs it before setup.
+  "onCreateCommand": "./script/install-mise",
+  // Trust and provision the toolchain in .mise.toml, then run the project's own
+  // setup task rather than duplicating what it does here.
+  "postCreateCommand": "mise trust && mise install && mise run setup",
+  "remoteUser": "node"
 }

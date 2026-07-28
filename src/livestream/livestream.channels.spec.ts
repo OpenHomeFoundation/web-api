@@ -166,14 +166,14 @@ describe('parseChannels', () => {
     it.each([
       ['only "@"', '@:home-assistant'],
       ['only "@" characters', '@@@:home-assistant'],
-    ])('distinguishes a handle that is %s from a missing one', (
-      _description,
-      raw,
-    ) => {
-      expect(() => parseChannels(raw)).toThrow(
-        `LIVESTREAM_CHANNELS[0] "${raw}" handle must name a channel, not just "@"`,
-      );
-    });
+    ])(
+      'distinguishes a handle that is %s from a missing one',
+      (_description, raw) => {
+        expect(() => parseChannels(raw)).toThrow(
+          `LIVESTREAM_CHANNELS[0] "${raw}" handle must name a channel, not just "@"`,
+        );
+      },
+    );
 
     it.each([
       ['a single dot', '.:home-assistant'],
@@ -301,12 +301,12 @@ describe('LIVESTREAM_CHANNELS', () => {
   });
 });
 
-describe('the LIVESTREAM_CHANNELS value shipped in .env.example', () => {
+describe('the LIVESTREAM_CHANNELS value shipped in example.env', () => {
   // Read the committed example rather than duplicating the value here, so the
   // documented default and this test cannot drift apart.
   const readEnvExample = (key: string): string | undefined => {
     const file = readFileSync(
-      join(__dirname, '..', '..', '.env.example'),
+      join(__dirname, '..', '..', 'example.env'),
       'utf8',
     );
     const line = file
@@ -329,9 +329,7 @@ describe('the LIVESTREAM_CHANNELS value shipped in .env.example', () => {
   });
 
   it('parses into the four Open Home Foundation projects', () => {
-    expect(
-      [...channels].sort((a, b) => a.slug.localeCompare(b.slug)),
-    ).toEqual([
+    expect([...channels].sort((a, b) => a.slug.localeCompare(b.slug))).toEqual([
       { slug: 'esphome', handle: 'esphomeio' },
       { slug: 'home-assistant', handle: 'home_assistant' },
       { slug: 'music-assistant', handle: 'musicassistantio' },

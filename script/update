@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Bring an existing checkout up to date after pulling changes. Safe to re-run.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> Enabling corepack"
+if ! corepack enable >/dev/null 2>&1; then
+  echo "!! 'corepack enable' failed; it needs write access to the Node installation." >&2
+  exit 1
+fi
+
+echo "==> Installing dependencies"
+pnpm install
+
+# No database and no code generation in this project, so there are no
+# migrations or codegen steps to run here.
+
+# Config is environment-variable driven, so a pull can introduce new settings.
+# Compare variable *names* only: .env may hold a real API key.
+if [ -f .env ]; then
+  env_names() { grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$1" | tr -d '=' | sort -u; }
+  missing=$(comm -23 <(env_names example.env) <(env_names .env) || true)
+  if [ -n "$missing" ]; then
+    echo "==> example.env has variables your .env does not set:"
+    while IFS= read -r name; do echo "    $name"; done <<<"$missing"
+  fi
+else
+  echo "==> No .env found. Run script/setup to create one from example.env."
+fi
+
+echo "==> Update complete."

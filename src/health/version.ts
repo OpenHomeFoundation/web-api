@@ -21,7 +21,8 @@ export function getVersionInfo(cwd: string = process.cwd()): Version {
     return { version: fromFile.version, hash: fromFile.hash };
   }
 
-  const version = readJsonField<string>(join(cwd, 'package.json'), 'version') ?? 'unknown';
+  const version =
+    readJsonField<string>(join(cwd, 'package.json'), 'version') ?? 'unknown';
   return { version, hash: process.env.GIT_COMMIT ?? 'dev' };
 }
 

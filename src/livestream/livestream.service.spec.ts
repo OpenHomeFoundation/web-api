@@ -216,7 +216,7 @@ class FakeYouTube {
   };
 
   private channelsList(url: URL): Response {
-    const slug = slugByHandle.get(url.searchParams.get('forHandle'));
+    const slug = slugByHandle.get(url.searchParams.get('forHandle') ?? '');
     return json({ items: slug ? [{ id: channelIdOf(slug) }] : [] });
   }
 
@@ -239,7 +239,7 @@ class FakeYouTube {
   }
 
   private feed(url: URL): Response {
-    const slug = slugByChannelId.get(url.searchParams.get('channel_id'));
+    const slug = slugByChannelId.get(url.searchParams.get('channel_id') ?? '');
     if (!slug) {
       return new Response('not found', { status: 404 });
     }
@@ -338,7 +338,9 @@ describe('LivestreamService', () => {
   const start = async (
     service: LivestreamService = createService(),
   ): Promise<LivestreamService> => {
-    await service.onModuleInit();
+    // Synchronous: it starts the timers and kicks off discovery without
+    // awaiting it, so settle() is what lets that first sweep finish.
+    service.onModuleInit();
     await settle();
     return service;
   };
@@ -349,7 +351,7 @@ describe('LivestreamService', () => {
   const videosListCalls = () => callsTo('/youtube/v3/videos');
 
   const idsRequestedIn = (call: unknown[]): string[] =>
-    new URL(String(call[0])).searchParams.get('id').split(',');
+    (new URL(String(call[0])).searchParams.get('id') ?? '').split(',');
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -357,7 +359,7 @@ describe('LivestreamService', () => {
     yt = new FakeYouTube();
     fetchMock = jest.fn(yt.fetch);
     originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock;
     services = [];
     // The service logs expected failures (bad feed, missing key) — keep the
     // test output readable without swallowing real errors.
@@ -695,13 +697,16 @@ describe('LivestreamService', () => {
       ['angle brackets', '&lt;Home&gt;', '<Home>'],
       ['a hex character reference', 'Caf&#xe9; Assistant', 'Café Assistant'],
       ['an escaped entity', 'Ampersand &amp;amp; Co', 'Ampersand &amp; Co'],
-    ])('decodes %s in a feed title', async (_description, encoded, expected) => {
-      // Atom escapes markup, so the raw match would otherwise reach clients.
-      yt.setFeedTitle('esphome', encoded);
-      const service = await start();
+    ])(
+      'decodes %s in a feed title',
+      async (_description, encoded, expected) => {
+        // Atom escapes markup, so the raw match would otherwise reach clients.
+        yt.setFeedTitle('esphome', encoded);
+        const service = await start();
 
-      expect(service.getStatus('esphome').channelName).toBe(expected);
-    });
+        expect(service.getStatus('esphome').channelName).toBe(expected);
+      },
+    );
 
     it("reports the channel-level <title> of the channel's own feed", async () => {
       const service = await start();

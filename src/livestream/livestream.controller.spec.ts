@@ -95,7 +95,10 @@ describe('LivestreamController', () => {
     });
 
     it('hands back the service object untouched, without copying or reshaping it', () => {
-      const status = info({ status: 'upcoming', startTime: '2026-08-01T17:00:00.000Z' });
+      const status = info({
+        status: 'upcoming',
+        startTime: '2026-08-01T17:00:00.000Z',
+      });
       service.getStatus.mockReturnValue(status);
 
       const result = controller.getStatus('home-assistant');

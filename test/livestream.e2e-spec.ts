@@ -95,10 +95,7 @@ interface Fixture extends ChannelFixture {
   feedUpdated: string;
 }
 
-const buildFixtures = (
-  channels: ChannelFixture[],
-  prefix: string,
-): Fixture[] =>
+const buildFixtures = (channels: ChannelFixture[], prefix: string): Fixture[] =>
   channels.map((channel, index) => ({
     ...channel,
     scenario: SCENARIOS[index % SCENARIOS.length],
@@ -112,8 +109,21 @@ const FIXTURES = buildFixtures(FIXTURE_CHANNELS, 'test');
 const SOLO_FIXTURES = buildFixtures(SOLO_CHANNELS, 'solo');
 const MIXED_FEED_FIXTURES = buildFixtures(MIXED_FEED_CHANNELS, 'mixed');
 
-const UPCOMING = FIXTURES.find((f) => f.scenario === 'upcoming');
-const LIVE = FIXTURES.find((f) => f.scenario === 'live');
+/**
+ * The fixture list is built to contain one of each scenario, so a missing one is
+ * a broken fixture rather than a runtime possibility — fail loudly here instead
+ * of threading undefined through every assertion.
+ */
+const fixtureFor = (scenario: Scenario): Fixture => {
+  const fixture = FIXTURES.find((f) => f.scenario === scenario);
+  if (!fixture) {
+    throw new Error(`no "${scenario}" fixture configured`);
+  }
+  return fixture;
+};
+
+const UPCOMING = fixtureFor('upcoming');
+const LIVE = fixtureFor('live');
 
 /** Scheduled far enough out that the service does not treat it as imminent. */
 const scheduledStartTime = new Date(Date.now() + 3 * HOUR_MS).toISOString();
@@ -214,7 +224,9 @@ const fetchHandlerFor =
         });
       }
       if (url.pathname === '/youtube/v3/videos') {
-        const ids = (url.searchParams.get('id') ?? '').split(',').filter(Boolean);
+        const ids = (url.searchParams.get('id') ?? '')
+          .split(',')
+          .filter(Boolean);
         const items = fixtures
           .filter((f) => ids.includes(f.videoId))
           .map(videoItem);
@@ -352,7 +364,7 @@ describe('Livestream (e2e)', () => {
   beforeAll(async () => {
     fetchMock = jest.fn(fetchHandlerFor(FIXTURES));
     // Stubbed before init() because the service calls the network on startup.
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     app = await createAppForChannels(FIXTURE_CHANNELS);
     server = app.getHttpServer();
@@ -498,7 +510,9 @@ describe('Livestream (e2e)', () => {
       expect(feedUrls.length).toBeGreaterThanOrEqual(FIXTURE_CHANNELS.length);
       for (const fixture of FIXTURES) {
         expect(
-          feedUrls.some((url) => url.includes(`channel_id=${fixture.channelId}`)),
+          feedUrls.some((url) =>
+            url.includes(`channel_id=${fixture.channelId}`),
+          ),
         ).toBe(true);
       }
     });
@@ -541,9 +555,7 @@ describe('Livestream channel list from configuration (e2e)', () => {
   const originalFetch = globalThis.fetch;
 
   beforeAll(async () => {
-    globalThis.fetch = jest.fn(
-      fetchHandlerFor(SOLO_FIXTURES),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = jest.fn(fetchHandlerFor(SOLO_FIXTURES));
 
     app = await createAppForChannels(SOLO_CHANNELS);
     server = app.getHttpServer();
@@ -575,7 +587,9 @@ describe('Livestream channel list from configuration (e2e)', () => {
   });
 
   it('returns 404 for a channel this app was not configured with', async () => {
-    const res = await request(server).get(`/livestream/${FIXTURE_CHANNELS[0].slug}`);
+    const res = await request(server).get(
+      `/livestream/${FIXTURE_CHANNELS[0].slug}`,
+    );
 
     expect(res.status).toBe(404);
     expect(res.body.message).toContain(FIXTURE_CHANNELS[0].slug);
@@ -590,7 +604,7 @@ describe('Livestream with an unreadable channel feed (e2e)', () => {
 
   beforeAll(async () => {
     fetchMock = jest.fn(fetchHandlerFor(MIXED_FEED_FIXTURES));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     app = await createApp(toChannelsConfig(MIXED_FEED_CHANNELS), true);
     server = app.getHttpServer();
@@ -613,7 +627,7 @@ describe('Livestream with an unreadable channel feed (e2e)', () => {
             `channel_id=${
               MIXED_FEED_FIXTURES.find(
                 (f) => f.slug === UNREADABLE_FEED_CHANNEL.slug,
-              ).channelId
+              )?.channelId
             }`,
           ),
         ),
@@ -671,7 +685,8 @@ describe('Livestream with an unreadable channel feed (e2e)', () => {
 });
 
 describe('Livestream with a malformed LIVESTREAM_CHANNELS (e2e)', () => {
-  let app: INestApplication;
+  // Only set if a boot unexpectedly succeeds, so afterEach can clean it up.
+  let app: INestApplication | undefined;
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
@@ -679,7 +694,7 @@ describe('Livestream with a malformed LIVESTREAM_CHANNELS (e2e)', () => {
     // A boot that unexpectedly succeeds must not reach the network either.
     globalThis.fetch = jest.fn(async (input: unknown) => {
       throw new Error(`Unexpected outbound request to ${String(input)}`);
-    }) as unknown as typeof fetch;
+    });
   });
 
   afterEach(async () => {
