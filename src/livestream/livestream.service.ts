@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { Channel, CHANNELS, feedUrl } from './livestream.channels';
+import { Channel, LIVESTREAM_CHANNELS, feedUrl } from './livestream.channels';
 
 export type LivestreamStatus = 'live' | 'upcoming' | 'past' | 'none';
 
@@ -19,10 +20,27 @@ export interface LivestreamInfo {
   status: LivestreamStatus;
   title?: string;
   url?: string;
-  /** ISO 8601 scheduled start time; present when status is "upcoming". */
+  /**
+   * ISO 8601 scheduled start time; present for "upcoming" streams and retained
+   * for "live" ones that were scheduled ahead of time.
+   */
   startTime?: string;
-  /** ISO 8601 timestamp of when this channel's state was last updated. */
+  /** ISO 8601 timestamp of when this channel's reported state last changed. */
   updatedAt: string;
+}
+
+/** One entry from a channel's RSS feed. */
+interface FeedEntry {
+  videoId: string;
+  /** Atom <updated>; YouTube bumps it when a video's metadata changes. */
+  updated: string;
+}
+
+/** A channel's RSS feed: its display name plus its recent entries. */
+interface Feed {
+  /** Channel-level <title>, i.e. the channel's display name. */
+  title: string;
+  entries: FeedEntry[];
 }
 
 /** A livestream video we are tracking the state of. */
@@ -32,24 +50,55 @@ interface TrackedVideo {
   status: LivestreamStatus;
   scheduledStartTime?: string;
   actualEndTime?: string;
-  updatedAt: number;
 }
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 const PAST_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Re-scan channels' RSS feeds to discover newly scheduled/published videos. */
 const DISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
-/** Base cadence for transition polling (used when a stream is live/imminent). */
+/**
+ * Transition polling cadence. Every tick re-queries only the videos that are
+ * live or imminent, so a tick with nothing active issues no requests at all and
+ * idle channels cost no quota.
+ */
 const RECONCILE_TICK_MS = 10 * 1000;
-/** When idle, only reconcile every Nth tick (10s * 6 = 60s). */
-const IDLE_TICKS = 6;
 /** Treat an upcoming stream as "imminent" within this window of its start. */
 const SOON_WINDOW_MS = 15 * 60 * 1000;
 
 const watchUrl = (videoId: string) =>
   `https://www.youtube.com/watch?v=${videoId}`;
 
-const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/g;
+const entryPattern = /<entry>([\s\S]*?)<\/entry>/g;
+const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/;
+const updatedPattern = /<updated>([^<]+)<\/updated>/;
+const titlePattern = /<title>([^<]*)<\/title>/;
+
+const XML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * Decode the XML entities an Atom element may contain, so a channel named
+ * "Nabu Casa's" is not served as "Nabu Casa&#39;s". Resolved in a single pass so
+ * an escaped entity ("&amp;amp;") decodes to "&amp;" rather than "&".
+ */
+const decodeXmlText = (value: string): string =>
+  value.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g, (match, ref: string) => {
+    if (!ref.startsWith('#')) {
+      return XML_ENTITIES[ref.toLowerCase()] ?? match;
+    }
+    const code =
+      ref[1] === 'x' || ref[1] === 'X'
+        ? parseInt(ref.slice(2), 16)
+        : parseInt(ref.slice(1), 10);
+    return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
+      ? String.fromCodePoint(code)
+      : match;
+  });
 
 const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
@@ -57,9 +106,7 @@ const stackOf = (err: unknown): string =>
 @Injectable()
 export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LivestreamService.name);
-  private readonly channelsBySlug = new Map(
-    CHANNELS.map((c) => [c.slug, c] as const),
-  );
+  private readonly channelsBySlug: Map<string, Channel>;
   /** Derived, ready-to-serve status per channel slug. */
   private readonly state = new Map<string, LivestreamInfo>();
   /** Tracked livestream videos per channel slug. */
@@ -68,19 +115,27 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private readonly slugByChannelId = new Map<string, string>();
   /** In-flight channel-ID resolutions, to de-duplicate concurrent lookups. */
   private readonly channelIdPromises = new Map<string, Promise<string>>();
+  /** Last seen feed fingerprint per slug, to skip redundant videos.list calls. */
+  private readonly feedFingerprints = new Map<string, string>();
+  /** Display name per slug, read from each channel's feed title. */
+  private readonly channelNames = new Map<string, string>();
   /** Stable timestamp used for channels that have no state yet. */
   private readonly startedAt = new Date().toISOString();
   private reconcileTimer?: ReturnType<typeof setInterval>;
   private discoveryTimer?: ReturnType<typeof setInterval>;
-  private tickCount = 0;
   private discoveryRunning = false;
   private reconcileRunning = false;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @Inject(LIVESTREAM_CHANNELS) private readonly channels: readonly Channel[],
+  ) {
+    this.channelsBySlug = new Map(this.channels.map((c) => [c.slug, c]));
+  }
 
   async onModuleInit(): Promise<void> {
-    // Seed initial state from each channel's (free) RSS feed so we are not
-    // blank until the first push arrives.
+    // Seed initial state from each channel's (free) RSS feed so the API is not
+    // blank until the first scheduled discovery sweep.
     void this.discovery();
     this.discoveryTimer = setInterval(
       () => void this.discovery(),
@@ -99,7 +154,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   }
 
   getAll(): LivestreamInfo[] {
-    return CHANNELS.map((channel) => this.readState(channel));
+    return this.channels.map((channel) => this.readState(channel));
   }
 
   getStatus(slug: string): LivestreamInfo {
@@ -111,13 +166,13 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Resolve a channel's YouTube channel ID (UC…), caching the result. */
-  async resolveChannelId(channel: Channel): Promise<string> {
+  private async resolveChannelId(channel: Channel): Promise<string> {
     const cached = this.channelIds.get(channel.slug);
     if (cached) {
       return cached;
     }
-    // De-duplicate concurrent resolutions (e.g. discovery + subscription on
-    // startup) so they share a single channels.list request.
+    // De-duplicate concurrent resolutions across a discovery sweep so they
+    // share a single channels.list request.
     let pending = this.channelIdPromises.get(channel.slug);
     if (!pending) {
       pending = this.fetchChannelId(channel).finally(() =>
@@ -142,34 +197,6 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     return id;
   }
 
-  /**
-   * Handle a WebSub push: fetch the referenced videos' live details and update
-   * state. Costs 1 quota unit per (batched) lookup.
-   */
-  async handleNotification(
-    channelId: string,
-    videoIds: string[],
-  ): Promise<void> {
-    let slug = this.slugByChannelId.get(channelId);
-    if (!slug) {
-      // Pushes can arrive before initial channel-ID resolution; try to populate the
-      // channelId->slug mapping once before dropping the notification.
-      await Promise.all(
-        CHANNELS.map((c) => this.resolveChannelId(c).catch(() => undefined)),
-      );
-      slug = this.slugByChannelId.get(channelId);
-    }
-    if (!slug) {
-      this.logger.warn(`Notification for unknown channel ${channelId}`);
-      return;
-    }
-    const items = await this.videoDetails(videoIds);
-    for (const item of items) {
-      this.track(slug, item);
-    }
-    this.recompute(slug);
-  }
-
   private readState(channel: Channel): LivestreamInfo {
     return this.state.get(channel.slug) ?? this.defaultInfo(channel);
   }
@@ -177,16 +204,25 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private defaultInfo(channel: Channel): LivestreamInfo {
     return {
       channel: channel.slug,
-      channelName: channel.name,
+      channelName: this.displayName(channel),
       status: 'none',
       updatedAt: this.startedAt,
     };
   }
 
   /**
+   * The channel's display name: its YouTube feed title once known, falling back
+   * to the slug so the field is always populated — including on the very first
+   * request, before the initial discovery sweep has landed.
+   */
+  private displayName(channel: Channel): string {
+    return this.channelNames.get(channel.slug) ?? channel.slug;
+  }
+
+  /**
    * Discover videos from every channel's (free) RSS feed and classify them
-   * with a cheap videos.list lookup. Runs on startup and on a timer to catch
-   * newly scheduled streams that WebSub may not push.
+   * with a cheap videos.list lookup. Runs on startup and on a timer; this is
+   * the only way newly scheduled or published streams enter our state.
    */
   private async discovery(): Promise<void> {
     if (this.discoveryRunning) {
@@ -195,7 +231,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     this.discoveryRunning = true;
     try {
       await Promise.all(
-        CHANNELS.map((channel) =>
+        this.channels.map((channel) =>
           this.discoverChannel(channel).catch((err) => {
             this.logger.error(
               `Discovery failed for ${channel.slug}`,
@@ -216,28 +252,112 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
 
   private async discoverChannel(channel: Channel): Promise<void> {
     const channelId = await this.resolveChannelId(channel);
-    const videoIds = await this.fetchFeedVideoIds(channelId);
-    if (videoIds.length > 0) {
-      const items = await this.videoDetails(videoIds);
-      for (const item of items) {
-        this.track(channel.slug, item);
-      }
+    const { title, entries } = await this.fetchFeed(channelId);
+
+    // Display names come from the channel itself rather than config, so they
+    // stay right through a rebrand without a deploy.
+    if (title) {
+      this.channelNames.set(channel.slug, title);
     }
+
+    // The feed is free but videos.list is not, so only re-classify when the
+    // feed actually changed. YouTube bumps an entry's <updated> when its
+    // metadata changes, so this still catches retitled or rescheduled streams.
+    const fingerprint = entries
+      .map((entry) => `${entry.videoId}@${entry.updated}`)
+      .join(',');
+    if (fingerprint !== this.feedFingerprints.get(channel.slug)) {
+      const videoIds = [...new Set(entries.map((entry) => entry.videoId))];
+      if (videoIds.length > 0) {
+        await this.refresh(new Map(videoIds.map((id) => [id, channel.slug])));
+      }
+      this.forgetUnlistedUpcoming(channel.slug, new Set(videoIds));
+      // Recorded only after a successful sweep: a thrown lookup must not leave
+      // us believing this feed is already classified.
+      this.feedFingerprints.set(channel.slug, fingerprint);
+    }
+
     this.recompute(channel.slug);
   }
 
   /**
-   * Adaptive transition poller: checks every tick while a stream is live or
-   * imminent, and only every IDLE_TICKS-th tick otherwise, so idle channels
-   * cost effectively no quota.
+   * Drop "upcoming" streams the channel feed no longer advertises. A scheduled
+   * stream that is deleted or unscheduled simply disappears from the feed, so
+   * videos.list is never asked about it again and refresh() cannot notice —
+   * without this the API would advertise a stream that no longer exists
+   * indefinitely.
+   *
+   * Deliberately limited to "upcoming". A live stream belongs to reconcile,
+   * which re-queries the API and is authoritative about it, and a past one ages
+   * out via pruneExpired; neither should be forgotten merely for falling out of
+   * the feed's most-recent-entries window. Reached only after a successful feed
+   * fetch, since a failure throws out of fetchFeed first.
+   */
+  private forgetUnlistedUpcoming(slug: string, listed: Set<string>): void {
+    const videos = this.tracked.get(slug);
+    if (!videos) {
+      return;
+    }
+    for (const [videoId, v] of videos) {
+      if (v.status === 'upcoming' && !listed.has(videoId)) {
+        videos.delete(videoId);
+        this.logger.log(`Untracked ${videoId}: no longer listed in the feed`);
+      }
+    }
+  }
+
+  /**
+   * Classify a batch of video IDs (keyed to the channel that owns them) and
+   * update their tracked state.
+   *
+   * videos.list silently omits IDs it will not serve — deleted, privated or
+   * made members-only — so anything we asked about and did not get back is
+   * gone and must be untracked. Skipping that leaves a stream pinned at its
+   * last known status forever: a "live" one would keep its channel reporting
+   * live and hold the fast reconcile cadence open indefinitely.
+   *
+   * Untracking is only safe because the caller reaches here on a successful
+   * response; a failed request throws out of videoDetails instead, leaving
+   * tracked state untouched rather than wrongly evicting live streams.
+   *
+   * Returns the slugs whose tracked videos changed.
+   */
+  private async refresh(slugByVideoId: Map<string, string>): Promise<Set<string>> {
+    const touched = new Set<string>();
+    const unreturned = new Map(slugByVideoId);
+    const items = await this.videoDetails([...slugByVideoId.keys()]);
+
+    for (const item of items) {
+      unreturned.delete(item.id);
+      // Prefer the caller's mapping; fall back to the channel the API reports
+      // for IDs we did not ask about by channel.
+      const slug =
+        slugByVideoId.get(item.id) ??
+        this.slugByChannelId.get(item.snippet?.channelId);
+      if (slug) {
+        this.track(slug, item);
+        touched.add(slug);
+      }
+    }
+
+    for (const [videoId, slug] of unreturned) {
+      if (this.tracked.get(slug)?.delete(videoId)) {
+        this.logger.log(`Untracked ${videoId}: no longer served by videos.list`);
+        touched.add(slug);
+      }
+    }
+
+    return touched;
+  }
+
+  /**
+   * Transition poller. Cheap when nothing is happening: reconcile() selects
+   * only live or imminent videos, so an idle tick issues no requests and spends
+   * no quota.
    */
   private async tick(): Promise<void> {
     // Evict streams whose past-window has elapsed, even when nothing is active.
     this.pruneExpired();
-    this.tickCount = (this.tickCount + 1) % IDLE_TICKS;
-    if (!this.hasActiveStream() && this.tickCount !== 0) {
-      return;
-    }
     if (this.reconcileRunning) {
       return;
     }
@@ -270,56 +390,27 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private hasActiveStream(): boolean {
-    const now = Date.now();
-    for (const videos of this.tracked.values()) {
-      for (const v of videos.values()) {
-        if (v.status === 'live') {
-          return true;
-        }
-        if (
-          v.status === 'upcoming' &&
-          v.scheduledStartTime &&
-          Date.parse(v.scheduledStartTime) - now <= SOON_WINDOW_MS
-        ) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   /** Re-check tracked upcoming/live videos to catch live/ended transitions. */
   private async reconcile(): Promise<void> {
-    const active: string[] = [];
     const now = Date.now();
-    for (const videos of this.tracked.values()) {
+    const active = new Map<string, string>();
+    for (const [slug, videos] of this.tracked) {
       for (const v of videos.values()) {
-        if (v.status === 'live') {
-          active.push(v.videoId);
-        } else if (
-          v.status === 'upcoming' &&
-          v.scheduledStartTime &&
-          Date.parse(v.scheduledStartTime) - now <= SOON_WINDOW_MS
+        if (
+          v.status === 'live' ||
+          (v.status === 'upcoming' &&
+            v.scheduledStartTime &&
+            Date.parse(v.scheduledStartTime) - now <= SOON_WINDOW_MS)
         ) {
-          active.push(v.videoId);
+          active.set(v.videoId, slug);
         }
       }
     }
-    if (active.length === 0) {
+    if (active.size === 0) {
       return;
     }
     try {
-      const items = await this.videoDetails(active);
-      const touched = new Set<string>();
-      for (const item of items) {
-        const slug = this.slugByChannelId.get(item.snippet?.channelId);
-        if (slug) {
-          this.track(slug, item);
-          touched.add(slug);
-        }
-      }
-      for (const slug of touched) {
+      for (const slug of await this.refresh(active)) {
         this.recompute(slug);
       }
     } catch (err) {
@@ -370,33 +461,61 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       status,
       scheduledStartTime: details.scheduledStartTime,
       actualEndTime: details.actualEndTime,
-      updatedAt: Date.now(),
     });
   }
 
-  /** Recompute the derived channel status from its tracked videos. */
+  /**
+   * Recompute the derived channel status from its tracked videos.
+   *
+   * updatedAt reports when the served state last *changed*, so clients can use
+   * it for caching and change detection. Re-deriving identical state therefore
+   * keeps the previous timestamp — otherwise it would advance on every 10s tick
+   * for the whole duration of a live stream.
+   */
   private recompute(slug: string): void {
     const channel = this.channelsBySlug.get(slug);
     if (!channel) {
       return;
     }
+
+    const next = this.derive(channel);
+    const previous = this.state.get(slug);
+    const changed =
+      !previous ||
+      previous.status !== next.status ||
+      previous.title !== next.title ||
+      previous.url !== next.url ||
+      previous.startTime !== next.startTime ||
+      // A rebrand changes what we serve too, so it has to move the timestamp
+      // or clients caching on updatedAt would keep the old name indefinitely.
+      previous.channelName !== next.channelName;
+
+    this.state.set(slug, {
+      ...next,
+      updatedAt: changed ? new Date().toISOString() : previous.updatedAt,
+    });
+  }
+
+  /** Pick the channel's reportable stream: live first, else soonest upcoming, else latest recent past. */
+  private derive(channel: Channel): Omit<LivestreamInfo, 'updatedAt'> {
     const base = {
       channel: channel.slug,
-      channelName: channel.name,
-      updatedAt: new Date().toISOString(),
+      channelName: this.displayName(channel),
     };
-    const videos = [...(this.tracked.get(slug)?.values() ?? [])];
+    const videos = [...(this.tracked.get(channel.slug)?.values() ?? [])];
     const now = Date.now();
 
     const live = videos.find((v) => v.status === 'live');
     if (live) {
-      this.state.set(slug, {
+      return {
         ...base,
         status: 'live',
         title: live.title,
         url: watchUrl(live.videoId),
-      });
-      return;
+        // Kept once the stream starts: a client watching the transition should
+        // not see startTime appear and then vanish.
+        startTime: live.scheduledStartTime,
+      };
     }
 
     const upcoming = videos
@@ -406,14 +525,13 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
           Date.parse(a.scheduledStartTime!) - Date.parse(b.scheduledStartTime!),
       )[0];
     if (upcoming) {
-      this.state.set(slug, {
+      return {
         ...base,
         status: 'upcoming',
         title: upcoming.title,
         url: watchUrl(upcoming.videoId),
         startTime: upcoming.scheduledStartTime,
-      });
-      return;
+      };
     }
 
     const past = videos
@@ -427,20 +545,19 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
         (a, b) => Date.parse(b.actualEndTime!) - Date.parse(a.actualEndTime!),
       )[0];
     if (past) {
-      this.state.set(slug, {
+      return {
         ...base,
         status: 'past',
         title: past.title,
         url: watchUrl(past.videoId),
-      });
-      return;
+      };
     }
 
-    this.state.set(slug, { ...base, status: 'none' });
+    return { ...base, status: 'none' };
   }
 
-  /** Fetch recent video IDs from a channel's RSS feed (free, no quota). */
-  private async fetchFeedVideoIds(channelId: string): Promise<string[]> {
+  /** Fetch a channel's RSS feed: title and recent entries (free, no quota). */
+  private async fetchFeed(channelId: string): Promise<Feed> {
     const res = await fetch(feedUrl(channelId), {
       signal: AbortSignal.timeout(10_000),
     });
@@ -448,7 +565,27 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       throw new Error(`Feed request failed: ${res.status}`);
     }
     const xml = await res.text();
-    return [...xml.matchAll(videoIdPattern)].map((m) => m[1]);
+    // A 200 carrying something other than the feed (an error page, a proxy
+    // interstitial) would otherwise read as "this channel has no videos" and
+    // evict tracked streams, and its <title> would be served as the channel
+    // name. Treat it as a failed fetch so prior state survives instead.
+    if (!xml.includes('<feed')) {
+      throw new Error('Feed response was not an Atom feed');
+    }
+
+    const entries: FeedEntry[] = [];
+    for (const [, entry] of xml.matchAll(entryPattern)) {
+      const videoId = videoIdPattern.exec(entry)?.[1];
+      if (videoId) {
+        entries.push({ videoId, updated: updatedPattern.exec(entry)?.[1] ?? '' });
+      }
+    }
+
+    // The channel's own <title> precedes the entries; an entry's <title> is the
+    // video's, so only look before the first one.
+    const [head] = xml.split('<entry>');
+    const title = titlePattern.exec(head)?.[1] ?? '';
+    return { title: decodeXmlText(title).trim(), entries };
   }
 
   private async videoDetails(videoIds: string[]): Promise<any[]> {
