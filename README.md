@@ -94,12 +94,17 @@ from a browser — the sites that consume it are deployed separately, so this is
 configuration too:
 
 ```
-CORS_ORIGINS=https://www.home-assistant.io,https://esphome.io
+CORS_ORIGINS=https://openhomefoundation.org,https://*.openhomefoundation.org
 ```
 
 Each entry is a scheme and host (with a port if it is not the default) and
-nothing else, since that is all a browser's `Origin` header carries. Use `*` on
-its own to allow any origin. Left unset, no cross-origin headers are sent: the
+nothing else, since that is all a browser's `Origin` header carries. A leading
+`*.` label covers every subdomain of a domain at any depth — `https://*.esphome.io`
+allows `www.esphome.io` and `a.b.esphome.io`, but not the bare `esphome.io`, so
+list the domain itself as well if it serves pages. It will not match a lookalike
+such as `evil-esphome.io`. Use `*` on its own to allow any origin.
+
+Left unset, no cross-origin headers are sent: the
 API still answers every request, but a browser will not hand the response to a
 page on another site. As with the channel list, a malformed entry fails startup
 rather than quietly dropping a site that was meant to be allowed.

@@ -83,6 +83,45 @@ describe('CORS from CORS_ORIGINS (e2e)', () => {
     }, 30_000);
   });
 
+  describe('with a domain and its subdomains', () => {
+    let fixture: TestApp;
+
+    beforeAll(async () => {
+      fixture = await startTestApp({
+        corsOrigins: 'https://home-assistant.io,https://*.home-assistant.io',
+      });
+    }, 30_000);
+
+    afterAll(async () => {
+      await fixture?.close();
+    });
+
+    it.each([
+      'https://home-assistant.io',
+      'https://www.home-assistant.io',
+      'https://developers.home-assistant.io',
+    ])('lets %s read the response', async (origin) => {
+      const res = await request(fixture.server)
+        .get('/livestream')
+        .set('Origin', origin);
+
+      expect(res.headers['access-control-allow-origin']).toBe(origin);
+    });
+
+    it.each([
+      'https://evil-home-assistant.io',
+      'https://home-assistant.io.evil.example',
+      'http://www.home-assistant.io',
+    ])('withholds the header from %s', async (origin) => {
+      const res = await request(fixture.server)
+        .get('/livestream')
+        .set('Origin', origin);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    });
+  });
+
   describe('with "*"', () => {
     let fixture: TestApp;
 

@@ -4,7 +4,12 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { ANY_ORIGIN, CORS_ORIGINS_ENV, parseCorsOrigins } from './cors';
+import {
+  ANY_ORIGIN,
+  CORS_ORIGINS_ENV,
+  corsOriginMatchers,
+  parseCorsOrigins,
+} from './cors';
 import { getVersionInfo } from './health/version';
 
 /** Where the Swagger UI is served from. */
@@ -36,7 +41,8 @@ export function setupSecurity(app: INestApplication): void {
  *
  * The consuming sites are deployed independently of this service, so who may
  * call it is configuration rather than code: adding a site is an environment
- * change. `*` opts every origin in.
+ * change. An entry may name one origin or, as `https://*.example.com`, every
+ * subdomain of a domain; `*` alone opts every origin in.
  *
  * With nothing configured, no cross-origin headers are sent at all — the API
  * still answers, but a browser on another site will not hand the response to the
@@ -61,7 +67,7 @@ export function setupCors(
   app.enableCors({
     // A list is matched against the request's Origin and echoed back, which is
     // why it cannot be collapsed into the "*" case: that sends a literal "*".
-    origin: anyOrigin ? ANY_ORIGIN : origins,
+    origin: anyOrigin ? ANY_ORIGIN : corsOriginMatchers(origins),
     // Every endpoint here is a read, so no other method needs advertising.
     methods: ['GET'],
   });
