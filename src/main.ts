@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { getVersionInfo } from './health/version';
 
@@ -8,6 +9,25 @@ import { getVersionInfo } from './health/version';
 export const SWAGGER_PATH = 'docs';
 /** Where the generated OpenAPI document itself is served from. */
 export const SWAGGER_JSON_PATH = `${SWAGGER_PATH}-json`;
+
+/**
+ * Apply the standard security response headers.
+ *
+ * Helmet's defaults are taken unchanged, because they already fit what this app
+ * serves. The only HTML it returns is the Swagger UI, and that page satisfies
+ * the default Content-Security-Policy: every script it loads is external and
+ * same-origin, so `script-src 'self'` covers them, and its inline `<style>`
+ * blocks fall under a default `style-src` that includes `'unsafe-inline'`.
+ * test/security.e2e-spec.ts asserts that pairing, so a future Swagger release
+ * that inlines a script fails a test instead of silently breaking the UI.
+ *
+ * Must run before any route is registered: Express walks middleware and route
+ * handlers in registration order, so a route mounted earlier would answer
+ * without these headers.
+ */
+export function setupSecurity(app: INestApplication): void {
+  app.use(helmet());
+}
 
 /**
  * Mount the OpenAPI document generated from the codebase, plus its UI.
@@ -37,6 +57,7 @@ export function setupSwagger(app: INestApplication): void {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  setupSecurity(app);
   setupSwagger(app);
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');

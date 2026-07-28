@@ -54,6 +54,11 @@ A livestream entry looks like this:
 describe. `updatedAt` changes only when the reported state changes, so it is safe
 to use for caching and change detection.
 
+Every response carries the security headers [helmet](https://helmetjs.github.io)
+applies by default, including a `Content-Security-Policy`, `nosniff`, and HSTS.
+The defaults are used unchanged; `test/security.e2e-spec.ts` asserts them and
+checks that the policy still fits what the Swagger UI at `/docs` needs.
+
 ## Configuration
 
 Configuration is environment variables only. `example.env` documents every one;
