@@ -2,8 +2,12 @@
 # (ERR_PNPM_IGNORED_BUILDS) on any that haven't been explicitly reviewed.
 # @nestjs/core's only postinstall is an Open Collective funding banner
 # (`opencollective || exit 0`), so we acknowledge it and skip it.
+# unrs-resolver (transitive, via jest-resolve) runs napi-postinstall to link a
+# native binding. The prebuilt platform binary arrives as an optional
+# dependency, so resolution works without running the script.
 allowBuilds:
   "@nestjs/core": false
+  unrs-resolver: false
 
 # Refuse to install any package version published less than 7 days ago
 # (10080 minutes), mitigating supply-chain attacks that rely on freshly
