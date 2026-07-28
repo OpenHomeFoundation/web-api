@@ -1,3 +1,5 @@
+import { Server } from 'node:http';
+
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -5,6 +7,7 @@ import request from 'supertest';
 
 import { Channel } from '../src/livestream/livestream.channels';
 import { LivestreamModule } from '../src/livestream/livestream.module';
+import { LivestreamInfo } from '../src/livestream/livestream.service';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -314,9 +317,9 @@ const feedRequests = (fetchMock: jest.Mock): string[] =>
  * turn by turn until the collection satisfies `settled` instead of sleeping.
  */
 const pollUntil = async (
-  server: any,
+  server: Server,
   what: string,
-  settled: (entries: any[]) => boolean,
+  settled: (entries: LivestreamInfo[]) => boolean,
 ): Promise<void> => {
   for (let turn = 0; turn < 200; turn++) {
     const res = await request(server).get('/livestream');
@@ -329,7 +332,7 @@ const pollUntil = async (
 };
 
 const waitForDiscovery = (
-  server: any,
+  server: Server,
   expectedChannels: number,
 ): Promise<void> =>
   pollUntil(
@@ -357,7 +360,7 @@ const isIsoTimestamp = (value: unknown): boolean =>
 
 describe('Livestream (e2e)', () => {
   let app: INestApplication;
-  let server: any;
+  let server: Server;
   let fetchMock: jest.Mock;
   const originalFetch = globalThis.fetch;
 
@@ -385,7 +388,7 @@ describe('Livestream (e2e)', () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body).toHaveLength(FIXTURE_CHANNELS.length);
-      expect(res.body.map((entry: any) => entry.channel)).toEqual(
+      expect(res.body.map((entry: LivestreamInfo) => entry.channel)).toEqual(
         FIXTURE_CHANNELS.map((channel) => channel.slug),
       );
     });
@@ -433,9 +436,9 @@ describe('Livestream (e2e)', () => {
       const first = await request(server).get('/livestream');
       const second = await request(server).get('/livestream');
 
-      expect(second.body.map((entry: any) => entry.updatedAt)).toEqual(
-        first.body.map((entry: any) => entry.updatedAt),
-      );
+      expect(
+        second.body.map((entry: LivestreamInfo) => entry.updatedAt),
+      ).toEqual(first.body.map((entry: LivestreamInfo) => entry.updatedAt));
     });
   });
 
@@ -449,7 +452,7 @@ describe('Livestream (e2e)', () => {
       expect(one.status).toBe(200);
       expect(one.body.channel).toBe(slug);
       expect(one.body).toEqual(
-        all.body.find((entry: any) => entry.channel === slug),
+        all.body.find((entry: LivestreamInfo) => entry.channel === slug),
       );
     });
 
@@ -551,7 +554,7 @@ describe('Livestream (e2e)', () => {
 
 describe('Livestream channel list from configuration (e2e)', () => {
   let app: INestApplication;
-  let server: any;
+  let server: Server;
   const originalFetch = globalThis.fetch;
 
   beforeAll(async () => {
@@ -572,7 +575,7 @@ describe('Livestream channel list from configuration (e2e)', () => {
     const res = await request(server).get('/livestream');
 
     expect(res.status).toBe(200);
-    expect(res.body.map((entry: any) => entry.channel)).toEqual([
+    expect(res.body.map((entry: LivestreamInfo) => entry.channel)).toEqual([
       'solo-config-channel',
     ]);
     expect(res.body[0].channelName).toBe(SOLO_CHANNELS[0].feedTitle);
@@ -598,7 +601,7 @@ describe('Livestream channel list from configuration (e2e)', () => {
 
 describe('Livestream with an unreadable channel feed (e2e)', () => {
   let app: INestApplication;
-  let server: any;
+  let server: Server;
   let fetchMock: jest.Mock;
   const originalFetch = globalThis.fetch;
 
@@ -643,12 +646,13 @@ describe('Livestream with an unreadable channel feed (e2e)', () => {
     const res = await request(server).get('/livestream');
 
     expect(res.status).toBe(200);
-    expect(res.body.map((entry: any) => entry.channel)).toEqual(
+    expect(res.body.map((entry: LivestreamInfo) => entry.channel)).toEqual(
       MIXED_FEED_CHANNELS.map((channel) => channel.slug),
     );
 
     const entry = res.body.find(
-      (candidate: any) => candidate.channel === UNREADABLE_FEED_CHANNEL.slug,
+      (candidate: LivestreamInfo) =>
+        candidate.channel === UNREADABLE_FEED_CHANNEL.slug,
     );
     expect(entry).toBeDefined();
     expect(entry.status).toBe('none');

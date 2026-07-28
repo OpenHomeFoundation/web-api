@@ -43,6 +43,31 @@ interface Feed {
   entries: FeedEntry[];
 }
 
+/**
+ * The parts of a YouTube Data API list item this service reads.
+ *
+ * Only the fields we request a `part` for are modelled, and everything but `id`
+ * is optional: a video that is not a broadcast has no `liveStreamingDetails`,
+ * and a broadcast carries only the timestamps its lifecycle has reached.
+ */
+interface YouTubeItem {
+  id: string;
+  snippet?: {
+    title?: string;
+    channelId?: string;
+  };
+  liveStreamingDetails?: {
+    scheduledStartTime?: string;
+    actualStartTime?: string;
+    actualEndTime?: string;
+  };
+}
+
+/** A YouTube Data API list response, pared down to what we read. */
+interface YouTubeListResponse {
+  items?: YouTubeItem[];
+}
+
 /** A livestream video we are tracking the state of. */
 interface TrackedVideo {
   videoId: string;
@@ -340,9 +365,10 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       unreturned.delete(item.id);
       // Prefer the caller's mapping; fall back to the channel the API reports
       // for IDs we did not ask about by channel.
+      const channelId = item.snippet?.channelId;
       const slug =
         slugByVideoId.get(item.id) ??
-        this.slugByChannelId.get(item.snippet?.channelId);
+        (channelId ? this.slugByChannelId.get(channelId) : undefined);
       if (slug) {
         this.track(slug, item);
         touched.add(slug);
@@ -430,8 +456,8 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Record (or drop) a video's livestream state from a YouTube API item. */
-  private track(slug: string, item: any): void {
-    const videoId: string = item.id;
+  private track(slug: string, item: YouTubeItem): void {
+    const videoId = item.id;
     const details = item.liveStreamingDetails;
     const videos = this.tracked.get(slug) ?? new Map<string, TrackedVideo>();
     this.tracked.set(slug, videos);
@@ -453,9 +479,10 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
       status = 'none';
     }
 
-    // Drop streams that ended more than the past-window ago.
+    // Drop streams that ended more than the past-window ago. An actualEndTime
+    // is what made the status 'past', so testing it again only narrows the type.
     if (
-      status === 'past' &&
+      details.actualEndTime &&
       Date.now() - Date.parse(details.actualEndTime) > PAST_WINDOW_MS
     ) {
       videos.delete(videoId);
@@ -602,12 +629,12 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     return { title: decodeXmlText(title).trim(), entries };
   }
 
-  private async videoDetails(videoIds: string[]): Promise<any[]> {
+  private async videoDetails(videoIds: string[]): Promise<YouTubeItem[]> {
     const unique = [...new Set(videoIds)];
     if (unique.length === 0) {
       return [];
     }
-    const items: any[] = [];
+    const items: YouTubeItem[] = [];
     for (let i = 0; i < unique.length; i += 50) {
       const data = await this.apiGet('videos', {
         part: 'snippet,liveStreamingDetails',
@@ -621,7 +648,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private async apiGet(
     path: string,
     params: Record<string, string>,
-  ): Promise<any> {
+  ): Promise<YouTubeListResponse> {
     const key = this.config.get<string>('YOUTUBE_API_KEY');
     if (!key) {
       throw new Error('YOUTUBE_API_KEY is not set');
@@ -639,6 +666,8 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
           (body ? ` - ${body}` : ''),
       );
     }
-    return res.json();
+    // Asserted rather than validated: the response is untrusted JSON, and every
+    // field YouTubeListResponse declares is optional, so reads narrow anyway.
+    return (await res.json()) as YouTubeListResponse;
   }
 }

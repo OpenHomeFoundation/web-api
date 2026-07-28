@@ -20,9 +20,11 @@ export default tseslint.config(
       },
     },
     rules: {
-      // The YouTube API responses are untyped JSON; they are narrowed at the
-      // point of use rather than modelled in full.
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // no-explicit-any is left at the recommended 'error': the shapes we read
+      // from YouTube and from Nest's framework seams are modelled instead. The
+      // unsafe-* rules stay off because the values arriving at those seams —
+      // res.json(), app.getHttpServer(), jest mock calls — are typed `any` by
+      // their own declarations, so reading them is unavoidably "unsafe".
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',

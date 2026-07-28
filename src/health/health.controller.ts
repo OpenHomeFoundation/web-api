@@ -23,7 +23,7 @@ export class HealthController {
     description: 'The process is up.',
     schema: { type: 'object', example: {} },
   })
-  lbheartbeat(): Record<string, any> {
+  lbheartbeat(): Record<string, unknown> {
     return {};
   }
 
@@ -38,7 +38,7 @@ export class HealthController {
     description: 'The app is healthy.',
     schema: { type: 'object', additionalProperties: true, example: {} },
   })
-  async heartbeat(): Promise<Record<string, any>> {
+  async heartbeat(): Promise<Record<string, unknown>> {
     if (this.config.extraHealthData) {
       return this.config.extraHealthData();
     }

@@ -1,3 +1,5 @@
+import { Server } from 'node:http';
+
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -80,7 +82,7 @@ const okSchema = (operation: Operation): Schema | undefined =>
 
 describe('Swagger (e2e)', () => {
   let app: INestApplication;
-  let server: any;
+  let server: Server;
   let document: OpenApiDocument;
   const originalFetch = globalThis.fetch;
 
