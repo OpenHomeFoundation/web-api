@@ -8,9 +8,14 @@
 # @scarf/scarf (transitive, via @nestjs/swagger) reports installation analytics
 # to a third party on postinstall. Nothing depends on it running, so it is
 # skipped rather than allowed to phone home from developer machines and CI.
+# esbuild (transitive, via likec4) has a postinstall that verifies its native
+# binary. Same reasoning as unrs-resolver: the binary comes from a prebuilt
+# optional dependency that esbuild resolves at runtime, so the check is not
+# needed for it to work — `likec4 validate` exercises exactly that path.
 allowBuilds:
   '@nestjs/core': false
   '@scarf/scarf': false
+  esbuild: false
   unrs-resolver: false
 
 # Refuse to install any package version published less than 7 days ago

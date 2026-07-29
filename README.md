@@ -133,19 +133,25 @@ Architecturally the feature is one Nest module (`src/livestream`) with a
 controller over an in-memory state map; there is no database. State is rebuilt
 from YouTube on every boot.
 
+The C4 diagrams in [`docs/architecture`](docs/architecture) say the same thing at
+each level the [OHF architecture standards](https://standards.openhomefoundation.org/architecture/c4-documentation/)
+ask for — context, containers, components, and the two polling loops as
+sequences. Browse them with `mise run diagrams`.
+
 ## Development
 
 Tasks are defined in `.mise.toml` and delegate to `script/`, so local runs and CI
 execute the same code paths. Run `mise tasks` to list them all.
 
-| Task              | Does                                                |
-| ----------------- | --------------------------------------------------- |
-| `mise run setup`  | Install dependencies, create `.env` if missing      |
-| `mise run update` | Sync dependencies after pulling                     |
-| `mise run dev`    | Start the server in watch mode                      |
-| `mise run test`   | Unit and e2e tests                                  |
-| `mise run ci`     | The full gate: format, lint, typecheck, test, build |
-| `mise run check`  | Same gate without the container build               |
+| Task                | Does                                                          |
+| ------------------- | ------------------------------------------------------------- |
+| `mise run setup`    | Install dependencies, create `.env` if missing                |
+| `mise run update`   | Sync dependencies after pulling                               |
+| `mise run dev`      | Start the server in watch mode                                |
+| `mise run test`     | Unit and e2e tests                                            |
+| `mise run diagrams` | Browse the C4 architecture diagrams                           |
+| `mise run ci`       | The full gate: format, lint, typecheck, diagrams, test, build |
+| `mise run check`    | Same gate without the container build                         |
 
 Tests are Jest, with Supertest for the HTTP layer. Unit specs live beside the
 code as `*.spec.ts`; end-to-end specs live in `test/` as `*.e2e-spec.ts` and boot

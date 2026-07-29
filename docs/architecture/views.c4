@@ -1,0 +1,178 @@
+// Cuts through the model in model.c4, one per level of the C4 standard:
+// https://standards.openhomefoundation.org/architecture/c4-documentation/
+//
+// C1 and C2 are the required pair. C3 is here because the decisions worth
+// knowing about (no datastore, two polling loops, the quota split) live inside
+// the single container, and C2 alone would hide them. C4 is covered by dynamic
+// views of the three code paths worth following: a request, and each loop.
+views {
+
+  // Deployed and reachable, but not part of the API. Dimmed everywhere rather
+  // than hidden, so nobody has to rediscover it.
+  style element.tag = #scaffolding {
+    color muted
+    opacity 30%
+  }
+
+  view index {
+    title 'C1 — System context'
+    description '''
+      Who uses the API and what it depends on. The point of the service is the
+      fan-in: four project websites want the same livestream status, and only
+      this service talks to YouTube, so the quota is spent once rather than per
+      site or per visitor.
+    '''
+
+    include
+      visitor,
+      websites,
+      webapi,
+      youtube,
+      platform
+
+    autoLayout TopBottom
+  }
+
+  view containers of webapi {
+    title 'C2 — Containers'
+    description '''
+      What actually runs: one process, listening on port 3000, with no
+      datastore beside it. The two YouTube interfaces are drawn separately
+      because the boundary between them is the design constraint — the feed is
+      free and polled on a schedule, the Data API is metered and called only
+      when something changed or is about to.
+    '''
+
+    include
+      *,
+      visitor,
+      websites,
+      youtube,
+      youtube.*,
+      platform
+
+    autoLayout TopBottom
+  }
+
+  view components of webapi.api {
+    title 'C3 — Components of the Web API service'
+    description '''
+      Inside the process. Two things are worth reading off this view: every
+      request passes through Bootstrap first, which is where the security
+      headers and the CORS decision happen; and the HTTP path never reaches
+      YouTube — it reads state the polling loops maintain, so a slow or failing
+      YouTube cannot slow down a response.
+    '''
+
+    include
+      *,
+      websites,
+      youtube,
+      youtube.*,
+      platform
+
+    autoLayout TopBottom
+  }
+
+  dynamic view request {
+    variant sequence
+    title 'C4 — Serving GET /livestream/:slug'
+    description '''
+      The read path, in full. No I/O beyond the process: the answer is already
+      derived, which is why an unreachable YouTube shows up as stale state
+      rather than a failed request.
+    '''
+
+    websites -> webapi.api.bootstrap 'GET /livestream/home-assistant'
+    webapi.api.bootstrap -> webapi.api.bootstrap 'applies helmet headers, matches Origin against CORS_ORIGINS'
+    webapi.api.bootstrap -> webapi.api.livestreamController 'routes to the handler'
+    webapi.api.livestreamController -> webapi.api.livestreamService 'getStatus(slug)'
+
+    alt {
+      when 'slug is a configured channel' {
+        webapi.api.livestreamService -> webapi.api.state 'reads the derived status'
+        webapi.api.livestreamController <- webapi.api.livestreamService 'channel, status, title, url, startTime, updatedAt'
+        websites <- webapi.api.bootstrap '200 with the channel status'
+      }
+      else 'unknown slug' {
+        webapi.api.livestreamController <- webapi.api.livestreamService 'NotFoundException'
+        websites <- webapi.api.bootstrap '404'
+      }
+    }
+  }
+
+  dynamic view discovery {
+    variant sequence
+    title 'C4 — Discovery sweep, every 5 minutes'
+    description '''
+      The only way a newly scheduled or published stream enters the model. Runs
+      at startup too, so the API is not blank until the first timer fires. In
+      the steady state it costs nothing: the feed is free, and an unchanged
+      fingerprint skips the metered call entirely.
+    '''
+
+    webapi.api.livestreamService -> webapi.api.state 'looks up the cached channel ID'
+
+    opt 'channel ID not resolved yet' {
+      webapi.api.livestreamService -> youtube.dataApi 'channels.list?forHandle=…'
+      webapi.api.livestreamService <- youtube.dataApi 'UC… channel ID'
+      webapi.api.livestreamService -> webapi.api.state 'caches the ID both ways'
+    }
+
+    webapi.api.livestreamService -> youtube.feeds 'GET videos.xml?channel_id=…'
+    webapi.api.livestreamService <- youtube.feeds 'channel title and its recent entries'
+    webapi.api.livestreamService -> webapi.api.state 'stores the display name, so a rebrand needs no deploy'
+
+    opt 'feed fingerprint differs from the last sweep' {
+      webapi.api.livestreamService -> youtube.dataApi 'videos.list(snippet, liveStreamingDetails) for the listed IDs'
+      webapi.api.livestreamService <- youtube.dataApi 'live / upcoming / ended, per video'
+      webapi.api.livestreamService -> webapi.api.state 'tracks them, and untracks what videos.list no longer serves'
+    }
+
+    webapi.api.livestreamService -> webapi.api.state 'recomputes the channel; updatedAt moves only if what we serve changed'
+  }
+
+  dynamic view reconcile {
+    variant sequence
+    title 'C4 — Reconcile tick, every 10 seconds'
+    description '''
+      What actually catches a stream going live or ending, at a cadence
+      discovery could not afford. It stays affordable by querying only the
+      streams that are live or start within 15 minutes — so the cost follows how
+      much is happening, not how many channels are configured.
+    '''
+
+    webapi.api.livestreamService -> webapi.api.state 'drops streams that ended more than 24 hours ago'
+    webapi.api.livestreamService -> webapi.api.state 'selects streams that are live or start within 15 minutes'
+
+    alt {
+      when 'at least one is active' {
+        webapi.api.livestreamService -> youtube.dataApi 'videos.list for those IDs only'
+        webapi.api.livestreamService <- youtube.dataApi 'current live streaming details'
+        webapi.api.livestreamService -> webapi.api.state 'applies the transitions and recomputes the channel'
+      }
+      else 'nothing active' {
+        webapi.api.livestreamService -> webapi.api.livestreamService 'returns without a request — an idle tick spends no quota'
+      }
+    }
+  }
+
+  view delivery {
+    title 'Delivery — from a published release to a running version'
+    description '''
+      Included because the deployed version is not something this repository
+      sets directly: the release workflow hands the image tag to Terraform
+      Cloud, which owns the deployment as state.
+    '''
+
+    include
+      engineer,
+      github,
+      ghcr,
+      terraform,
+      platform,
+      webapi
+
+    autoLayout LeftRight
+  }
+}

@@ -50,6 +50,11 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      # Catches an architecture model that no longer parses or that references an
+      # element which has been renamed or removed.
+      - name: Architecture diagrams
+        run: pnpm run diagrams:check
+
       - name: Unit tests
         run: pnpm test
 

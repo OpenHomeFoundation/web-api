@@ -54,6 +54,14 @@ run = "pnpm run format:check"
 description = "Type-check with tsc"
 run = "pnpm run typecheck"
 
+[tasks.diagrams]
+description = "Browse the C4 architecture diagrams (LikeC4 dev server)"
+run = "pnpm run diagrams"
+
+[tasks."diagrams:check"]
+description = "Validate the architecture model in docs/architecture"
+run = "pnpm run diagrams:check"
+
 [tasks.build]
 description = "Compile to dist/"
 run = "pnpm run build"

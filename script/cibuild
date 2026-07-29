@@ -28,6 +28,11 @@ pnpm run lint
 echo "==> Typecheck"
 pnpm run typecheck
 
+# The architecture model is source too: a reference to an element that has been
+# renamed or removed should fail here rather than rot in the diagrams.
+echo "==> Architecture diagrams"
+pnpm run diagrams:check
+
 echo "==> Unit tests"
 pnpm test
 

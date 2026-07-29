@@ -16,7 +16,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run test:e2e",
+    "diagrams": "likec4 start docs/architecture",
+    "diagrams:check": "likec4 validate docs/architecture",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run diagrams:check && pnpm test && pnpm run test:e2e",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -70,6 +72,7 @@
     "globals": "^17.7.0",
     "husky": "^9.1.7",
     "jest": "^30.4.2",
+    "likec4": "^1.59.1",
     "lint-staged": "^17.1.0",
     "prettier": "^3.9.6",
     "socket.io-client": "^4.8.3",
