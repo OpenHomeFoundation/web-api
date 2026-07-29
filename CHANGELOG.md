@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.1.0...v0.2.0) (2026-07-29)
+
+
+### Features
+
+* add livestream REST endpoints ([#32](https://github.com/OpenHomeFoundation/web-api/issues/32)) ([f1ef8da](https://github.com/OpenHomeFoundation/web-api/commit/f1ef8da6398c39f3bb2ecd5f89ad1a4b16e80891))
+
 ## [0.1.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.0.5...v0.1.0) (2026-06-23)
 
 
