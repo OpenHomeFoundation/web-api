@@ -3,9 +3,9 @@
 # Both stages pin the same digest, so a build is reproducible and a tag that
 # moves under us cannot change what we ship. It is the multi-platform index
 # digest rather than a single manifest, which is what keeps the release build's
-# linux/amd64 and linux/arm64 targets working. Renovate keeps it current; note
-# that its 7-day cooldown means base-image patches land a week after release,
-# so an urgent one has to be pinned by hand.
+# linux/amd64 and linux/arm64 targets working. Renovate keeps it current, on a
+# 1-day cooldown rather than the 7 days other updates wait, since a digest bump
+# is how this image's security patches arrive.
 FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 WORKDIR /app
 RUN corepack enable

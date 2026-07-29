@@ -4,4 +4,23 @@
   // Wait at least 7 days after a release before opening an update PR,
   // giving the ecosystem time to surface regressions or supply-chain issues.
   minimumReleaseAge: '7 days',
+
+  // Keep every container image reference pinned to a digest, and keep those
+  // digests moving. A digest that is already pinned gets update PRs by default;
+  // this also pins anything not pinned yet — a newly added Dockerfile stage, the
+  // devcontainer image — so a floating tag cannot slip back in unnoticed.
+  pinDigests: true,
+
+  packageRules: [
+    {
+      // A digest update to an image we already trust is the same tag rebuilt,
+      // which is how base-image security patches arrive. The cooldown above
+      // guards against freshly published malicious *packages*; holding an
+      // official image's patches back for a week only extends our exposure, so
+      // these move on a shorter leash.
+      matchDatasources: ['docker'],
+      matchUpdateTypes: ['digest'],
+      minimumReleaseAge: '1 day',
+    },
+  ],
 }
