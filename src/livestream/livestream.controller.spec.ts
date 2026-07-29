@@ -109,13 +109,11 @@ describe('LivestreamController', () => {
 
     it('propagates the NotFoundException raised for an unknown slug', () => {
       service.getStatus.mockImplementation(() => {
-        throw new NotFoundException('Unknown channel "nope"');
+        throw new NotFoundException('Unknown channel');
       });
 
       expect(() => controller.getStatus('nope')).toThrow(NotFoundException);
-      expect(() => controller.getStatus('nope')).toThrow(
-        'Unknown channel "nope"',
-      );
+      expect(() => controller.getStatus('nope')).toThrow('Unknown channel');
     });
 
     it('propagates non-HTTP service errors unchanged', () => {

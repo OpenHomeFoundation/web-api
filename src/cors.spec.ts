@@ -2,14 +2,16 @@ import {
   ANY_ORIGIN,
   CORS_ORIGINS_ENV,
   corsOriginMatchers,
+  originMatches,
   parseCorsOrigins,
 } from './cors';
 
-/** Does this configuration allow `origin`, the way enableCors() decides it? */
+/**
+ * Does this configuration allow `origin`? Asked through originMatches, which is
+ * also what the WebSocket handshake asks, so every case below covers both.
+ */
 const allows = (raw: string, origin: string): boolean =>
-  corsOriginMatchers(parseCorsOrigins(raw)).some((matcher) =>
-    typeof matcher === 'string' ? matcher === origin : matcher.test(origin),
-  );
+  originMatches(corsOriginMatchers(parseCorsOrigins(raw)), origin);
 
 describe('parseCorsOrigins', () => {
   describe('no configured origins', () => {

@@ -151,3 +151,22 @@ export function corsOriginMatchers(origins: string[]): (string | RegExp)[] {
     );
   });
 }
+
+/**
+ * Decide whether an Origin may read this API, against the matchers `enableCors`
+ * is given.
+ *
+ * Express answers this question itself for HTTP requests; the WebSocket
+ * handshake has to ask it, because socket.io's own CORS handling only covers the
+ * polling transport — a WebSocket upgrade carries an Origin but is not subject
+ * to CORS at all, so the server is the only thing that can refuse it. Sharing
+ * the matchers means the two cannot drift apart in what they allow.
+ */
+export function originMatches(
+  matchers: readonly (string | RegExp)[],
+  origin: string,
+): boolean {
+  return matchers.some((matcher) =>
+    typeof matcher === 'string' ? matcher === origin : matcher.test(origin),
+  );
+}

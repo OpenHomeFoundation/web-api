@@ -59,6 +59,13 @@ applies by default, including a `Content-Security-Policy`, `nosniff`, and HSTS.
 The defaults are used unchanged; `test/security.e2e-spec.ts` asserts them and
 checks that the policy still fits what the Swagger UI at `/docs` needs.
 
+Reads are open to no one by default and to the origins in `CORS_ORIGINS` when it
+is set — the same list the Socket.IO endpoint honours, which refuses a handshake
+from an origin that is not on it. A `404` reports only that the channel is
+unknown, without repeating the requested slug back. Rate limiting belongs to
+Cloudflare in front of this service, not to the app — see
+[Configuration](#configuration).
+
 ## Configuration
 
 Configuration is environment variables only. `example.env` documents every one;
@@ -108,6 +115,19 @@ Left unset, no cross-origin headers are sent: the
 API still answers every request, but a browser will not hand the response to a
 page on another site. As with the channel list, a malformed entry fails startup
 rather than quietly dropping a site that was meant to be allowed.
+
+The same list governs the Socket.IO endpoint, which refuses a handshake from an
+origin that is not on it. That check runs on the handshake itself rather than
+through socket.io's CORS option, because a WebSocket upgrade is not subject to
+CORS at all — without it, the socket transport would be the way around the
+allow-list. A client that sends no `Origin` header, which is anything that is not
+a browser, is still accepted, exactly as it is over HTTP.
+
+Rate limiting is not done here. The service is served through Cloudflare
+(`cloudflare_proxy = true` on its DNS record in the `deployments` repository),
+which counts requests at the edge where the real client address is visible — a
+limit in the app would have to infer that address from a forwarded header, and
+one keyed wrongly throttles every visitor against a single shared budget.
 
 ## How it works
 

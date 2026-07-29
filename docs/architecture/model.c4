@@ -61,11 +61,29 @@ model {
     }
   }
 
-  platform = external 'Hosting platform' {
+  // The two elements below are described by the `deployments` repository
+  // (Terraform Cloud workspace "web-api"), not by this one.
+  edge = external 'Cloudflare' {
     description '''
-      Runs the published container image. Probes /__lbheartbeat__ from the load
-      balancer and /__heartbeat__ from the container health check, and serves
-      the API to the public internet.
+      Proxies web-api.openhomefoundation.org — the DNS record is created with
+      cloudflare_proxy = true — in front of the load balancer.
+
+      This is where request rate limiting belongs, and why the service does not
+      implement any: the edge counts against the real client address, which an
+      origin behind a proxy can only infer from a forwarded header.
+    '''
+  }
+
+  platform = external 'AWS eu-central-1' {
+    technology 'ECS Fargate behind a shared ALB'
+    description '''
+      A shared Application Load Balancer routes to one Fargate task (ARM64,
+      256 CPU units, 512 MiB, desired count 1) on a private subnet, whose
+      security group accepts traffic from the ALB alone — so it cannot be
+      reached by, or reach, the other services in the VPC.
+
+      The ALB probes the service over HTTP, and the container probes itself
+      with /__heartbeat__ through the image's HEALTHCHECK.
     '''
   }
 
@@ -126,6 +144,9 @@ model {
           CORS_ORIGINS, and the OpenAPI document with its Swagger UI at /docs.
           Registration order is what makes this the first thing every request
           passes through.
+
+          It also hands the parsed origin list to the socket adapter, so one list
+          governs both transports.
         '''
       }
 
@@ -181,14 +202,18 @@ model {
         '''
       }
 
-      templateEndpoints = component 'Template endpoints' {
+      gateway = component 'Socket.IO gateway' {
         #scaffolding
-        technology 'src/app.controller.ts, src/app.gateway.ts'
+        technology 'src/app.gateway.ts, src/websocket.adapter.ts'
         description '''
-          Left over from the project template: GET /test, and a Socket.IO
-          gateway that greets whoever connects. Excluded from the OpenAPI
-          document, but reachable, so it is in the model rather than assumed
-          away.
+          A socket endpoint carried over from the project template, which so far
+          only greets whoever connects. Nothing published consumes it.
+
+          It is held to the same origins as the HTTP endpoints, enforced on the
+          handshake rather than through socket.io's CORS option, because a
+          WebSocket upgrade is exempt from CORS and would otherwise be the way
+          around the allow-list. Clients that send no Origin — anything that is
+          not a browser — are still accepted, as they are over HTTP.
         '''
       }
 
@@ -197,7 +222,7 @@ model {
       // decision really do come first.
       bootstrap -[inproc]-> livestreamController 'routes /livestream'
       bootstrap -[inproc]-> healthController 'routes the probe endpoints'
-      bootstrap -[inproc]-> templateEndpoints 'routes /test and the socket handshake'
+      bootstrap -[inproc]-> gateway 'admits handshakes from the configured origins'
       livestreamController -[inproc]-> livestreamService 'reads the current status'
       livestreamService -[inproc]-> state 'derives from, and writes back'
       channelConfig -[inproc]-> livestreamService 'injects the validated channel list at boot'
@@ -207,8 +232,11 @@ model {
   // ── Data flows ──────────────────────────────────────────────────────────────
 
   visitor -[https]-> websites 'opens in a browser'
-  websites -[api]-> bootstrap 'fetches livestream status (cross-origin, from the visitor browser)'
-  platform -[https]-> healthController 'probes __lbheartbeat__ and __heartbeat__'
+  // The request path in full: the browser reaches the edge, never the task.
+  websites -[api]-> edge 'fetches livestream status (cross-origin, from the visitor browser)'
+  edge -[api]-> platform 'proxies to the origin load balancer'
+  platform -[api]-> bootstrap 'forwards to the running task on port 3000'
+  platform -[https]-> healthController 'probes the app, and the container probes itself'
 
   livestreamService -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
   livestreamService -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'

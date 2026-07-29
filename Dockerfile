@@ -1,6 +1,12 @@
 # syntax=docker/dockerfile:1.25
 
-FROM node:24-alpine AS builder
+# Both stages pin the same digest, so a build is reproducible and a tag that
+# moves under us cannot change what we ship. It is the multi-platform index
+# digest rather than a single manifest, which is what keeps the release build's
+# linux/amd64 and linux/arm64 targets working. Renovate keeps it current; note
+# that its 7-day cooldown means base-image patches land a week after release,
+# so an urgent one has to be pinned by hand.
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 WORKDIR /app
 RUN corepack enable
 # HUSKY=0 disables the `prepare` hook: git hooks are a developer-machine
@@ -14,7 +20,7 @@ COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 RUN pnpm run build
 
-FROM node:24-alpine AS runner
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

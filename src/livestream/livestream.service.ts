@@ -192,7 +192,11 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   getStatus(slug: string): LivestreamInfo {
     const channel = this.channelsBySlug.get(slug);
     if (!channel) {
-      throw new NotFoundException(`Unknown channel "${slug}"`);
+      // The requested slug is deliberately not echoed back. It is attacker
+      // controlled, and a consumer that renders this message into a page would
+      // inherit an injection we handed it. The path they asked for already tells
+      // them which channel was not found.
+      throw new NotFoundException('Unknown channel');
     }
     return this.readState(channel);
   }

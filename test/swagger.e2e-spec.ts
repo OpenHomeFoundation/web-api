@@ -211,8 +211,15 @@ describe('Swagger (e2e)', () => {
     });
   });
 
-  it('leaves the template scaffolding endpoint out of the spec', () => {
-    // GET /test is excluded, but still routed.
-    expect(document.paths['/test']).toBeUndefined();
+  it('documents every route the app serves, and nothing else', () => {
+    // The spec is the API's contract, so a route appearing here that nobody
+    // meant to publish — or a published one missing — should fail a test.
+    expect(Object.keys(document.paths).sort()).toEqual([
+      '/__heartbeat__',
+      '/__lbheartbeat__',
+      '/__version__',
+      '/livestream',
+      '/livestream/{slug}',
+    ]);
   });
 });

@@ -26,6 +26,7 @@ views {
     include
       visitor,
       websites,
+      edge,
       webapi,
       youtube,
       platform
@@ -41,12 +42,16 @@ views {
       because the boundary between them is the design constraint — the feed is
       free and polled on a schedule, the Data API is metered and called only
       when something changed or is about to.
+
+      Nothing reaches the task directly: Cloudflare proxies to a shared load
+      balancer, which is also the layer that owns request rate limiting.
     '''
 
     include
       *,
       visitor,
       websites,
+      edge,
       youtube,
       youtube.*,
       platform
@@ -67,6 +72,7 @@ views {
     include
       *,
       websites,
+      edge,
       youtube,
       youtube.*,
       platform
@@ -78,9 +84,10 @@ views {
     variant sequence
     title 'C4 — Serving GET /livestream/:slug'
     description '''
-      The read path, in full. No I/O beyond the process: the answer is already
-      derived, which is why an unreachable YouTube shows up as stale state
-      rather than a failed request.
+      The read path once the request is in the process — Cloudflare and the load
+      balancer sit ahead of the first step; see the C2 view. From here on there is
+      no I/O at all: the answer is already derived, which is why an unreachable
+      YouTube shows up as stale state rather than a failed request.
     '''
 
     websites -> webapi.api.bootstrap 'GET /livestream/home-assistant'

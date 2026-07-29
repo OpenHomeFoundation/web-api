@@ -4,11 +4,16 @@ import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { AppController } from '../src/app.controller';
+import { AppGateway } from '../src/app.gateway';
 import { HealthModule } from '../src/health';
 import { getVersionInfo } from '../src/health/version';
 import { LivestreamModule } from '../src/livestream';
-import { setupCors, setupSecurity, setupSwagger } from '../src/main';
+import {
+  setupCors,
+  setupSecurity,
+  setupSwagger,
+  setupWebsocketCors,
+} from '../src/main';
 
 /**
  * A booted app, assembled the way bootstrap() assembles it, for the suites whose
@@ -19,6 +24,8 @@ import { setupCors, setupSecurity, setupSwagger } from '../src/main';
 export interface TestApp {
   app: INestApplication;
   server: Server;
+  /** Base URL of the listening app. Only set when started with `listen`. */
+  url?: string;
   /** Shuts the app down and restores the real fetch. */
   close: () => Promise<void>;
 }
@@ -26,6 +33,8 @@ export interface TestApp {
 export interface TestAppOptions {
   /** Value for CORS_ORIGINS. Omitted leaves it unset, i.e. no CORS headers. */
   corsOrigins?: string;
+  /** Listen on an ephemeral port, for suites that need a real client to connect. */
+  listen?: boolean;
 }
 
 /**
@@ -56,6 +65,7 @@ const fetchStub = (input: unknown): Response => {
 
 export const startTestApp = async ({
   corsOrigins,
+  listen = false,
 }: TestAppOptions = {}): Promise<TestApp> => {
   const originalFetch = globalThis.fetch;
   // Stubbed before init() because the livestream service calls out on startup.
@@ -78,21 +88,27 @@ export const startTestApp = async ({
       HealthModule.register({ version: getVersionInfo() }),
       LivestreamModule,
     ],
-    controllers: [AppController],
+    providers: [AppGateway],
   }).compile();
 
   const app = moduleRef.createNestApplication({ logger: false });
   // Same order as bootstrap(), which matters: Express walks middleware and route
   // handlers in registration order, so anything mounted before these would
-  // answer without their headers.
+  // answer without their headers. The websocket adapter has to be in place
+  // before init(), which is when the gateway binds its server.
   setupSecurity(app);
-  setupCors(app, corsOrigins);
+  const origins = setupCors(app, corsOrigins);
+  setupWebsocketCors(app, origins);
   setupSwagger(app);
   await app.init();
+  if (listen) {
+    await app.listen(0);
+  }
 
   return {
     app,
     server: app.getHttpServer(),
+    url: listen ? await app.getUrl() : undefined,
     close: async () => {
       // Clears the discovery/reconcile intervals so Jest can exit cleanly.
       await app.close();

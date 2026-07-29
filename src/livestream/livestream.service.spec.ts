@@ -661,7 +661,14 @@ describe('LivestreamService', () => {
       title: 'Known channel stream',
     });
     expect(() => service.getStatus('nope')).toThrow(NotFoundException);
-    expect(() => service.getStatus('nope')).toThrow('Unknown channel "nope"');
+    // The slug is not repeated back: it is attacker controlled, and a consumer
+    // rendering the message would inherit whatever was in it.
+    expect(() => service.getStatus('<img src=x onerror=alert(1)>')).toThrow(
+      'Unknown channel',
+    );
+    expect(() => service.getStatus('<img src=x onerror=alert(1)>')).not.toThrow(
+      /img src/,
+    );
   });
 
   it('batches videos.list in chunks of 50 and requests each video ID once', async () => {

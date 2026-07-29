@@ -456,26 +456,33 @@ describe('Livestream (e2e)', () => {
       );
     });
 
-    it('returns 404 naming the channel when the slug is unknown', async () => {
+    it('returns 404 when the slug is unknown, without repeating it back', async () => {
       const res = await request(server).get('/livestream/not-a-real-channel');
 
       expect(res.status).toBe(404);
       expect(res.headers['content-type']).toMatch(/application\/json/);
       expect(res.body.statusCode).toBe(404);
-      expect(res.body.message).toContain('not-a-real-channel');
+      expect(res.body.message).toBe('Unknown channel');
+      // The path already tells the caller which channel they asked for, so
+      // echoing it buys nothing and hands every consumer our input to render.
+      expect(res.text).not.toContain('not-a-real-channel');
     });
 
-    it('returns 404 for a slug containing path traversal characters', async () => {
-      const res = await request(server).get(
-        '/livestream/..%2F..%2Fetc%2Fpasswd',
-      );
+    it.each([
+      ['path traversal', '..%2F..%2Fetc%2Fpasswd', 'root:'],
+      ['markup', '%3Cimg%20src=x%20onerror=alert(1)%3E', '<img'],
+    ])(
+      'returns an inert 404 for a slug containing %s',
+      async (_, slug, trace) => {
+        const res = await request(server).get(`/livestream/${slug}`);
 
-      expect(res.status).toBe(404);
-      // The decoded path is rejected as an unknown channel, so the request did
-      // reach the controller rather than dying in the routing/URL layer.
-      expect(res.body.message).toContain('../../etc/passwd');
-      expect(res.text).not.toContain('root:');
-    });
+        expect(res.status).toBe(404);
+        // Reached the controller and was rejected as an unknown channel, rather
+        // than dying in the routing layer or coming back with anything of ours.
+        expect(res.body.message).toBe('Unknown channel');
+        expect(res.text).not.toContain(trace);
+      },
+    );
   });
 
   describe('RSS-only discovery', () => {
@@ -595,7 +602,7 @@ describe('Livestream channel list from configuration (e2e)', () => {
     );
 
     expect(res.status).toBe(404);
-    expect(res.body.message).toContain(FIXTURE_CHANNELS[0].slug);
+    expect(res.body.message).toBe('Unknown channel');
   });
 });
 

@@ -11,6 +11,7 @@ import {
   parseCorsOrigins,
 } from './cors';
 import { getVersionInfo } from './health/version';
+import { CorsIoAdapter } from './websocket.adapter';
 
 /** Where the Swagger UI is served from. */
 export const SWAGGER_PATH = 'docs';
@@ -48,11 +49,14 @@ export function setupSecurity(app: INestApplication): void {
  * still answers, but a browser on another site will not hand the response to the
  * page that asked for it. That is deliberate: a deployment that has not said who
  * may read it should not be guessed at.
+ *
+ * Returns the parsed origins so the WebSocket side can be held to the same list
+ * without parsing it a second time.
  */
 export function setupCors(
   app: INestApplication,
   raw: string | undefined,
-): void {
+): string[] {
   const logger = new Logger('Cors');
   const origins = parseCorsOrigins(raw);
 
@@ -60,7 +64,7 @@ export function setupCors(
     logger.warn(
       `${CORS_ORIGINS_ENV} is not set — no origin can read this API from a browser`,
     );
-    return;
+    return origins;
   }
 
   const anyOrigin = origins[0] === ANY_ORIGIN;
@@ -77,6 +81,22 @@ export function setupCors(
       ? 'Cross-origin reads allowed from any origin'
       : `Cross-origin reads allowed from ${origins.join(', ')}`,
   );
+
+  return origins;
+}
+
+/**
+ * Hold the Socket.IO gateway to the same origins as the HTTP endpoints.
+ *
+ * Must be called before the app is initialised, since that is when gateways bind
+ * their server. See CorsIoAdapter for why socket.io's own `cors` option is not
+ * enough on its own.
+ */
+export function setupWebsocketCors(
+  app: INestApplication,
+  origins: readonly string[],
+): void {
+  app.useWebSocketAdapter(new CorsIoAdapter(app, origins));
 }
 
 /**
@@ -109,7 +129,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   setupSecurity(app);
   // Read through ConfigService so a value from .env is picked up like any other.
-  setupCors(app, app.get(ConfigService).get<string>(CORS_ORIGINS_ENV));
+  const origins = setupCors(
+    app,
+    app.get(ConfigService).get<string>(CORS_ORIGINS_ENV),
+  );
+  // The same list governs both, so the socket transport cannot become the way
+  // around the HTTP allow-list.
+  setupWebsocketCors(app, origins);
   setupSwagger(app);
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
