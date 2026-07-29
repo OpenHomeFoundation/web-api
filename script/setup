@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# First-time project setup. Safe to re-run.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> Enabling corepack"
+# pnpm's version is pinned by package.json's `packageManager` field; corepack
+# resolves that exact version instead of whatever pnpm happens to be on PATH.
+if ! corepack enable >/dev/null 2>&1; then
+  echo "!! 'corepack enable' failed; it needs write access to the Node installation." >&2
+  echo "   Enable corepack manually (or run through 'mise run setup'), then retry." >&2
+  exit 1
+fi
+
+echo "==> Installing dependencies"
+pnpm install
+
+if [ -f .env ]; then
+  echo "==> .env already exists, leaving it untouched"
+else
+  echo "==> Creating .env from example.env"
+  cp example.env .env
+  echo "    Set YOUTUBE_API_KEY in .env before starting the server."
+fi
+
+# No database and no code generation in this project, so there is nothing to
+# migrate or generate here.
+
+echo "==> Setup complete. Run 'mise run dev' to start the server."

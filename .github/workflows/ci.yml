@@ -15,6 +15,52 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Quality
+    runs-on: ubuntu-latest
+    env:
+      # pnpm's minimumReleaseAge re-validates every lockfile entry's publish
+      # date even for frozen installs. That cooldown is a resolution-time guard
+      # for adopting new versions; CI merely reproduces an already-gated,
+      # PR-reviewed lockfile, so it should not be re-gated here.
+      PNPM_CONFIG_MINIMUM_RELEASE_AGE: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      # pnpm is pinned via the packageManager field, so corepack resolves the
+      # exact version the lockfile was written with.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Formatting
+        run: pnpm run format:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      # Catches an architecture model that no longer parses or that references an
+      # element which has been renamed or removed.
+      - name: Architecture diagrams
+        run: pnpm run diagrams:check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+
   docker_build:
     name: Docker Build
     runs-on: ubuntu-latest

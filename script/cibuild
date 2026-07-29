@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Full CI pipeline: the same gates .github/workflows/ci.yml runs, plus the
+# format/lint/typecheck checks enforced by review and the release image build.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# pnpm's minimumReleaseAge re-validates every lockfile entry's publish date even
+# for frozen installs. That cooldown is a resolution-time guard for adopting new
+# versions; a CI run merely reproduces an already-gated, PR-reviewed lockfile,
+# so it should not be re-gated here. Mirrors the env var set in CI.
+export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
+
+echo "==> Enabling corepack"
+if ! corepack enable >/dev/null 2>&1; then
+  echo "!! 'corepack enable' failed; it needs write access to the Node installation." >&2
+  exit 1
+fi
+
+echo "==> Installing dependencies (frozen lockfile)"
+pnpm install --frozen-lockfile
+
+echo "==> Format check"
+pnpm run format:check
+
+echo "==> Lint"
+pnpm run lint
+
+echo "==> Typecheck"
+pnpm run typecheck
+
+# The architecture model is source too: a reference to an element that has been
+# renamed or removed should fail here rather than rot in the diagrams.
+echo "==> Architecture diagrams"
+pnpm run diagrams:check
+
+echo "==> Unit tests"
+pnpm test
+
+echo "==> End-to-end tests"
+pnpm run test:e2e
+
+echo "==> Build"
+pnpm run build
+
+echo "==> cibuild passed."

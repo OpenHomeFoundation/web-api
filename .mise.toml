@@ -1,0 +1,77 @@
+# Task registry for this project. See:
+# https://standards.openhomefoundation.org/standards/task-conventions/
+#
+# Lifecycle tasks delegate to script/ so CI and local development run the exact
+# same code paths. Run `mise tasks` to list everything.
+
+[tools]
+# Matches the Dockerfile (node:24-alpine) and CI's setup-node.
+node = "24"
+# pnpm is deliberately not managed here: package.json's `packageManager` field
+# pins it and corepack provisions that exact version, so a second pin in mise
+# could disagree with the lockfile.
+
+[tasks.setup]
+description = "First-time project setup: dependencies and local .env"
+run = "./script/setup"
+
+[tasks.update]
+description = "Sync the checkout after pulling changes"
+run = "./script/update"
+
+[tasks.dev]
+description = "Start the development server in watch mode"
+run = "./script/server"
+
+[tasks.test]
+description = "Run the test suite (unit + e2e)"
+run = "./script/test"
+
+[tasks.ci]
+description = "Run the full CI suite: format, lint, typecheck, test, build"
+run = "./script/cibuild"
+
+# Convenience tasks. These call package scripts directly; the standard only
+# requires the lifecycle tasks above to go through script/.
+
+[tasks.lint]
+description = "Lint with ESLint"
+run = "pnpm run lint"
+
+[tasks."lint:fix"]
+description = "Lint and apply fixes"
+run = "pnpm run lint:fix"
+
+[tasks.format]
+description = "Format with Prettier"
+run = "pnpm run format"
+
+[tasks."format:check"]
+description = "Check formatting without writing"
+run = "pnpm run format:check"
+
+[tasks.typecheck]
+description = "Type-check with tsc"
+run = "pnpm run typecheck"
+
+[tasks.diagrams]
+description = "Browse the C4 architecture diagrams (LikeC4 dev server)"
+run = "pnpm run diagrams"
+
+[tasks."diagrams:check"]
+description = "Validate the architecture model in docs/architecture"
+run = "pnpm run diagrams:check"
+
+[tasks.build]
+description = "Compile to dist/"
+run = "pnpm run build"
+
+[tasks.check]
+description = "Format check, lint, typecheck and tests"
+run = "pnpm run check"
+
+[tasks.console]
+description = "TypeScript REPL with the project's dependencies loaded"
+# The app has no src/repl.ts, so this is a plain ts-node REPL rather than a
+# NestJS application REPL.
+run = "pnpm exec ts-node"

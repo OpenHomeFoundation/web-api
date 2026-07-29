@@ -1,0 +1,67 @@
+// Shared vocabulary for every diagram in this model: element kinds, the
+// relationship kinds that carry protocol/technology, and the tags views filter
+// on. Defined once here so a "container" or an "external system" reads the same
+// wherever it appears.
+specification {
+  element actor {
+    notation 'Person'
+    style {
+      shape person
+      color secondary
+    }
+  }
+
+  element system {
+    notation 'Software system'
+  }
+
+  // Anything the foundation does not run as part of this service.
+  element external {
+    notation 'External system'
+    style {
+      color muted
+    }
+  }
+
+  element container {
+    notation 'Container'
+  }
+
+  element component {
+    notation 'Component'
+  }
+
+  element store {
+    notation 'Data store'
+    style {
+      shape storage
+    }
+  }
+
+  relationship https {
+    technology 'HTTPS'
+  }
+
+  relationship rest {
+    technology 'REST/JSON over HTTPS'
+  }
+
+  relationship atom {
+    technology 'Atom XML over HTTPS'
+  }
+
+  relationship api {
+    technology 'HTTPS/JSON'
+  }
+
+  // Everything inside the one Node process: a plain method call, not a network
+  // hop. Drawn dashed so the boundary between the two is visible at a glance.
+  relationship inproc {
+    technology 'In-process call'
+    line dashed
+  }
+
+  // Left over from the project template. Kept in the model rather than tidied
+  // out of the picture, because it is deployed and reachable.
+  tag scaffolding
+}

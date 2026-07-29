@@ -1,0 +1,8 @@
+dist/
+coverage/
+pnpm-lock.yaml
+CHANGELOG.md
+
+# Developer-local tooling config, not project source.
+.vscode/
+.claude/

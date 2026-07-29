@@ -1,4 +1,10 @@
 node_modules/
+# pnpm needs its store on the same filesystem as node_modules to hardlink, so
+# inside the devcontainer (where the workspace is a bind mount and $HOME is
+# not) it falls back to a project-local store. Machine-local package cache.
+.pnpm-store/
 dist/
 *.log
 .DS_Store
+.env
+coverage/

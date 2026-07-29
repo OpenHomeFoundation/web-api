@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Start the development server in watch mode.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -d node_modules ]; then
+  echo "!! node_modules is missing. Run script/setup first." >&2
+  exit 1
+fi
+
+if [ ! -f .env ]; then
+  echo "!! No .env found; the server will start but every channel reports \"none\"." >&2
+  echo "   Run script/setup to create one from example.env." >&2
+fi
+
+echo "==> Starting web-api on port ${PORT:-3000}"
+exec pnpm run start:dev

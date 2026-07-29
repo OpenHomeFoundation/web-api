@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Run the test suite. Extra arguments are passed to the unit-test runner, e.g.
+#   script/test livestream --watch
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -d node_modules ]; then
+  echo "!! node_modules is missing. Run script/setup first." >&2
+  exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+  echo "==> Unit tests (filtered: $*)"
+  exec pnpm test -- "$@"
+fi
+
+echo "==> Unit tests"
+pnpm test
+
+echo "==> End-to-end tests"
+pnpm run test:e2e

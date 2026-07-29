@@ -1,4 +1,9 @@
-import { DynamicModule, Module, ModuleMetadata } from '@nestjs/common';
+import {
+  DynamicModule,
+  FactoryProvider,
+  Module,
+  ModuleMetadata,
+} from '@nestjs/common';
 
 import { HEALTH_CONFIG } from './health.constants';
 import { HealthController } from './health.controller';
@@ -6,15 +11,20 @@ import { Version } from './version';
 
 export interface HealthControllerConfigParams {
   version: Version;
-  extraHealthData?: () => Promise<Record<string, any>>;
+  extraHealthData?: () => Promise<Record<string, unknown>>;
 }
 
-export interface HealthModuleAsyncParams
-  extends Pick<ModuleMetadata, 'imports' | 'providers'> {
-  useFactory: (
-    ...args: any[]
-  ) => HealthControllerConfigParams | Promise<HealthControllerConfigParams>;
-  inject?: any[];
+export interface HealthModuleAsyncParams extends Pick<
+  ModuleMetadata,
+  'imports' | 'providers'
+> {
+  // Borrowed from Nest's own provider types rather than restated: the factory
+  // and its injected tokens are handed straight to a FactoryProvider below, so
+  // anything Nest accepts there has to be accepted here.
+  useFactory: FactoryProvider<
+    HealthControllerConfigParams | Promise<HealthControllerConfigParams>
+  >['useFactory'];
+  inject?: FactoryProvider['inject'];
 }
 
 @Module({

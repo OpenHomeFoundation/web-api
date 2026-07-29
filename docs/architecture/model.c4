@@ -1,0 +1,250 @@
+// The architecture of this repository, described once at every level of detail
+// the OHF standards ask for. The views in views.c4 are cuts through this model;
+// nothing is described twice.
+//
+// Sections below map to the C4 levels: actors and neighbours (C1), what runs
+// (C2), and what is inside the running process (C3).
+model {
+
+  // ── Actors ──────────────────────────────────────────────────────────────────
+
+  visitor = actor 'Website visitor' {
+    description '''
+      Someone reading an OHF project website who wants to know whether a stream
+      is on air, scheduled, or has just ended.
+    '''
+  }
+
+  engineer = actor 'OHF engineer' {
+    description 'Reviews and merges changes, and publishes releases.'
+  }
+
+  // ── Neighbouring systems ────────────────────────────────────────────────────
+
+  websites = external 'OHF project websites' {
+    technology 'Static sites'
+    description '''
+      openhomefoundation.org, home-assistant.io, esphome.io and
+      music-assistant.io. Each is deployed independently of this service and
+      reads the API from the visitor's browser, which is why the origins allowed
+      to do so are configuration (CORS_ORIGINS) rather than code.
+    '''
+    style {
+      shape browser
+    }
+  }
+
+  youtube = external 'YouTube' {
+    description '''
+      The source of truth for every livestream this API reports. Two interfaces
+      are used, and the split between them is the central cost constraint of the
+      design: the feed is free, the API is quota-metered.
+    '''
+
+    feeds = external 'Channel RSS feeds' {
+      technology 'Atom XML'
+      description '''
+        youtube.com/feeds/videos.xml?channel_id=… — a channel's recent videos
+        and its display name. Costs no API quota, so it can be polled freely,
+        but it does not say whether a video is a broadcast or whether it is on
+        air.
+      '''
+    }
+
+    dataApi = external 'YouTube Data API v3' {
+      technology 'REST/JSON'
+      description '''
+        channels.list resolves a handle to a channel ID; videos.list classifies
+        a video as live, upcoming or ended. Quota-metered, so it is called only
+        when a feed changed or a tracked stream is live or imminent.
+      '''
+    }
+  }
+
+  // The two elements below are described by the `deployments` repository
+  // (Terraform Cloud workspace "web-api"), not by this one.
+  edge = external 'Cloudflare' {
+    description '''
+      Proxies web-api.openhomefoundation.org — the DNS record is created with
+      cloudflare_proxy = true — in front of the load balancer.
+
+      This is where request rate limiting belongs, and why the service does not
+      implement any: the edge counts against the real client address, which an
+      origin behind a proxy can only infer from a forwarded header.
+    '''
+  }
+
+  platform = external 'AWS eu-central-1' {
+    technology 'ECS Fargate behind a shared ALB'
+    description '''
+      A shared Application Load Balancer routes to one Fargate task (ARM64,
+      256 CPU units, 512 MiB, desired count 1) on a private subnet, whose
+      security group accepts traffic from the ALB alone — so it cannot be
+      reached by, or reach, the other services in the VPC.
+
+      The ALB probes the service over HTTP, and the container probes itself
+      with /__heartbeat__ through the image's HEALTHCHECK.
+    '''
+  }
+
+  // ── Delivery ────────────────────────────────────────────────────────────────
+
+  github = external 'GitHub Actions' {
+    description '''
+      Runs the quality gate on every pull request, and on a published release
+      builds the multi-arch image, attests its provenance and rolls the
+      deployment forward.
+    '''
+  }
+
+  ghcr = external 'GitHub Container Registry' {
+    technology 'OCI registry'
+    description 'Holds the versioned image plus its signed build-provenance attestation.'
+  }
+
+  terraform = external 'Terraform Cloud' {
+    description '''
+      Owns the deployment. The release workflow writes the new image tag into a
+      variable set and queues an auto-applied run in the web-api workspace, so
+      the deployed version is state Terraform holds rather than something a
+      workflow mutates directly.
+    '''
+  }
+
+  // ── The system, and what runs (C2) ──────────────────────────────────────────
+
+  webapi = system 'OHF Web API' {
+    technology 'NestJS on Node 24'
+    description '''
+      Public, read-only HTTP API for openhomefoundation.org. It reports the
+      livestream status of the foundation's YouTube channels — live, upcoming,
+      recently ended, or nothing — so the project websites can show it without
+      each of them talking to YouTube.
+    '''
+
+    api = container 'Web API service' {
+      technology 'NestJS 11 / Express on Node 24, port 3000'
+      description '''
+        One process, one container image. It answers HTTP requests and runs the
+        two YouTube polling loops on timers side by side.
+
+        There is no database and no cache container: all state is in the
+        process, and it is rebuilt from YouTube on every boot. That is the
+        significant architectural decision at this level — see the C3 view for
+        where the state lives.
+      '''
+
+      // ── What is inside the process (C3) ────────────────────────────────────
+
+      bootstrap = component 'Bootstrap' {
+        technology 'src/main.ts'
+        description '''
+          Creates the Nest application and, before any route is registered,
+          installs helmet's security headers, the CORS allow-list parsed from
+          CORS_ORIGINS, and the OpenAPI document with its Swagger UI at /docs.
+          Registration order is what makes this the first thing every request
+          passes through.
+
+          It also hands the parsed origin list to the socket adapter, so one list
+          governs both transports.
+        '''
+      }
+
+      livestreamController = component 'Livestream controller' {
+        technology 'src/livestream/livestream.controller.ts'
+        description '''
+          GET /livestream and GET /livestream/:slug. A pure read of already
+          derived state: a request never triggers a call to YouTube, so response
+          time does not depend on it, and an unknown slug is a 404.
+        '''
+      }
+
+      healthController = component 'Health controller' {
+        technology 'src/health/health.controller.ts'
+        description '''
+          /__lbheartbeat__ for the load balancer, /__heartbeat__ for the
+          application, and /__version__ reporting the running build's version
+          and commit.
+        '''
+      }
+
+      channelConfig = component 'Channel configuration' {
+        technology 'src/livestream/livestream.channels.ts'
+        description '''
+          Parses LIVESTREAM_CHANNELS into validated handle:slug pairs once, at
+          boot. Adding or removing a project is a configuration change, and
+          malformed configuration fails startup rather than quietly tracking
+          nothing.
+        '''
+      }
+
+      livestreamService = component 'Livestream service' {
+        technology 'src/livestream/livestream.service.ts'
+        description '''
+          Owns both polling loops and the derivation rules: discovery every
+          5 minutes from the feeds, reconciliation every 10 seconds over only
+          the streams that are live or start within 15 minutes, and per channel
+          "live, else soonest upcoming, else one that ended within 24 hours".
+        '''
+      }
+
+      state = store 'Channel state' {
+        technology 'In-process Maps'
+        description '''
+          Tracked livestream videos per channel, the ready-to-serve status
+          derived from them, resolved channel IDs, display names and feed
+          fingerprints.
+
+          Deliberately not a database: nothing here is worth more than the one
+          discovery sweep it takes to rebuild, so a restart is cheap and there
+          is no store to operate, back up or migrate. The cost is that state is
+          per-instance, which is what keeps this a single-instance service.
+        '''
+      }
+
+      gateway = component 'Socket.IO gateway' {
+        #scaffolding
+        technology 'src/app.gateway.ts, src/websocket.adapter.ts'
+        description '''
+          A socket endpoint carried over from the project template, which so far
+          only greets whoever connects. Nothing published consumes it.
+
+          It is held to the same origins as the HTTP endpoints, enforced on the
+          handshake rather than through socket.io's CORS option, because a
+          WebSocket upgrade is exempt from CORS and would otherwise be the way
+          around the allow-list. Clients that send no Origin — anything that is
+          not a browser — are still accepted, as they are over HTTP.
+        '''
+      }
+
+      // Request path. Modelled through Bootstrap because Express walks
+      // middleware in registration order, so the security headers and the CORS
+      // decision really do come first.
+      bootstrap -[inproc]-> livestreamController 'routes /livestream'
+      bootstrap -[inproc]-> healthController 'routes the probe endpoints'
+      bootstrap -[inproc]-> gateway 'admits handshakes from the configured origins'
+      livestreamController -[inproc]-> livestreamService 'reads the current status'
+      livestreamService -[inproc]-> state 'derives from, and writes back'
+      channelConfig -[inproc]-> livestreamService 'injects the validated channel list at boot'
+    }
+  }
+
+  // ── Data flows ──────────────────────────────────────────────────────────────
+
+  visitor -[https]-> websites 'opens in a browser'
+  // The request path in full: the browser reaches the edge, never the task.
+  websites -[api]-> edge 'fetches livestream status (cross-origin, from the visitor browser)'
+  edge -[api]-> platform 'proxies to the origin load balancer'
+  platform -[api]-> bootstrap 'forwards to the running task on port 3000'
+  platform -[https]-> healthController 'probes the app, and the container probes itself'
+
+  livestreamService -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
+  livestreamService -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'
+
+  // Delivery path, as the release workflow performs it.
+  engineer -> github 'merges, and publishes a release'
+  github -> ghcr 'pushes the versioned image and its provenance attestation'
+  github -> terraform 'sets the image tag and queues an auto-applied run'
+  terraform -> platform 'rolls the deployment forward'
+  platform -> ghcr 'pulls the image'
+}
