@@ -6,7 +6,7 @@
 # linux/amd64 and linux/arm64 targets working. Renovate keeps it current, on a
 # 1-day cooldown rather than the 7 days other updates wait, since a digest bump
 # is how this image's security patches arrive.
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS builder
 WORKDIR /app
 RUN corepack enable
 # HUSKY=0 disables the `prepare` hook: git hooks are a developer-machine
@@ -20,7 +20,7 @@ COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 RUN pnpm run build
 
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS runner
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
