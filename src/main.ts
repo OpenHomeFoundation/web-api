@@ -114,7 +114,8 @@ export function setupSwagger(app: INestApplication): void {
     .setDescription(
       'Public web API for openhomefoundation.org. Serves the livestream status ' +
         "of the foundation's YouTube channels, derived from their feeds and the " +
-        'YouTube Data API.',
+        "YouTube Data API, and the events of the foundation's Luma calendars, " +
+        'read from their iCalendar feeds.',
     )
     .setVersion(getVersionInfo().version)
     .build();

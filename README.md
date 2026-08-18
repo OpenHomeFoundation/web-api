@@ -4,7 +4,9 @@ Public web API for [openhomefoundation.org](https://www.openhomefoundation.org).
 
 It currently serves the livestream status of the Open Home Foundation's YouTube
 channels — Home Assistant, ESPHome, Open Home Foundation and Music Assistant —
-so the project websites can show upcoming, live and recently-ended streams.
+so the project websites can show upcoming, live and recently-ended streams, and
+the events of the foundation's Luma calendars, read from their iCalendar feeds,
+so the sites can show meetups and other community events.
 
 Built to the [OHF engineering standards](https://standards.openhomefoundation.org):
 NestJS on Node LTS, TypeScript in strict mode, pnpm, and Mise for task running.
@@ -31,6 +33,8 @@ Interactive documentation is generated from the code and served at
 | ------ | ------------------- | ------------------------------------------------- |
 | `GET`  | `/livestream`       | Livestream status for every configured channel    |
 | `GET`  | `/livestream/:slug` | Status for one channel; `404` for an unknown slug |
+| `GET`  | `/events`           | Every configured Luma calendar with its events    |
+| `GET`  | `/events/:slug`     | One calendar's events; `404` for an unknown slug  |
 | `GET`  | `/__heartbeat__`    | Application health probe                          |
 | `GET`  | `/__lbheartbeat__`  | Load-balancer probe                               |
 | `GET`  | `/__version__`      | Running build's version and commit                |
@@ -54,6 +58,36 @@ A livestream entry looks like this:
 describe. `updatedAt` changes only when the reported state changes, so it is safe
 to use for caching and change detection.
 
+An events calendar entry looks like this:
+
+```json
+{
+  "calendar": "home-assistant-meetups",
+  "calendarName": "Home Assistant Meetups",
+  "events": [
+    {
+      "id": "evt-HJ5eO3aJOiCob3z@events.lu.ma",
+      "summary": "Dublin - Hosted by the OHF",
+      "start": "2026-06-04T17:30:00.000Z",
+      "end": "2026-06-04T20:30:00.000Z",
+      "description": "Get up-to-date information at: https://luma.com/n5mzdtvb",
+      "location": "26 Wexford St, Portobello, Dublin, D02 HX93, Ireland",
+      "url": "https://luma.com/n5mzdtvb",
+      "latitude": 53.336691,
+      "longitude": -6.26573,
+      "status": "tentative"
+    }
+  ],
+  "updatedAt": "2026-08-18T12:00:00.000Z"
+}
+```
+
+Events are everything the calendar's Luma feed advertises — past ones included,
+sorted soonest first — so the consumer decides the window it shows. Times are
+UTC; an all-day event carries a bare `YYYY-MM-DD` date instead. `url` is the
+event's Luma page. As with livestreams, `updatedAt` moves only when the served
+content changes.
+
 Every response carries the security headers [helmet](https://helmetjs.github.io)
 applies by default, including a `Content-Security-Policy`, `nosniff`, and HSTS.
 The defaults are used unchanged; `test/security.e2e-spec.ts` asserts them and
@@ -61,8 +95,8 @@ checks that the policy still fits what the Swagger UI at `/docs` needs.
 
 Reads are open to no one by default and to the origins in `CORS_ORIGINS` when it
 is set — the same list the Socket.IO endpoint honours, which refuses a handshake
-from an origin that is not on it. A `404` reports only that the channel is
-unknown, without repeating the requested slug back. Rate limiting belongs to
+from an origin that is not on it. A `404` reports only that the channel or
+calendar is unknown, without repeating the requested slug back. Rate limiting belongs to
 Cloudflare in front of this service, not to the app — see
 [Configuration](#configuration).
 
@@ -72,12 +106,13 @@ Configuration is environment variables only. `example.env` documents every one;
 copy it to `.env` for local development (`.env` is gitignored and must never be
 committed). In production these are set on the container.
 
-| Variable              | Required | Purpose                                          |
-| --------------------- | -------- | ------------------------------------------------ |
-| `YOUTUBE_API_KEY`     | yes      | YouTube Data API v3 key, used to classify videos |
-| `LIVESTREAM_CHANNELS` | yes      | Channels to track, as `handle:slug` pairs        |
-| `CORS_ORIGINS`        | no       | Sites allowed to read the API from a browser     |
-| `PORT`                | no       | Listen port, defaults to `3000`                  |
+| Variable              | Required | Purpose                                             |
+| --------------------- | -------- | --------------------------------------------------- |
+| `YOUTUBE_API_KEY`     | yes      | YouTube Data API v3 key, used to classify videos    |
+| `LIVESTREAM_CHANNELS` | yes      | Channels to track, as `handle:slug` pairs           |
+| `EVENTS_CALENDARS`    | yes      | Luma calendars to serve, as `calendarId:slug` pairs |
+| `CORS_ORIGINS`        | no       | Sites allowed to read the API from a browser        |
+| `PORT`                | no       | Listen port, defaults to `3000`                     |
 
 `LIVESTREAM_CHANNELS` is a comma-separated list of `handle:slug` pairs:
 
@@ -95,6 +130,23 @@ Display names are read from each channel's feed at runtime, so they are not
 configured. Adding or removing a project is a configuration change, not a code
 change. Malformed configuration fails startup rather than silently tracking
 nothing.
+
+`EVENTS_CALENDARS` works the same way for Luma calendars, as a comma-separated
+list of `calendarId:slug` pairs:
+
+```
+EVENTS_CALENDARS=cal-6Tm2FkWzoBpLXWr:home-assistant-meetups
+```
+
+- `calendarId` is the Luma calendar ID the iCalendar feed is fetched by
+  (`api.luma.com/ics/get?entity=calendar&id=<calendarId>`).
+- `slug` is the path this API serves the calendar under (`/events/<slug>`) and
+  the `calendar` field in the response — pinned in configuration for the same
+  reason channel slugs are.
+
+Calendar display names come from each feed's `X-WR-CALNAME` at runtime. The
+feeds are public, so no API key is involved; they are re-fetched every 15
+minutes, and a calendar whose fetch fails keeps serving what it served before.
 
 `CORS_ORIGINS` is a comma-separated list of the origins allowed to read the API
 from a browser — the sites that consume it are deployed separately, so this is
@@ -149,9 +201,12 @@ videos.list (quota) ─▶ reconcile poll  ──┘
   notifies on uploads and metadata edits, not on a broadcast going live, so it
   cannot deliver the signal this service is about.
 
-Architecturally the feature is one Nest module (`src/livestream`) with a
-controller over an in-memory state map; there is no database. State is rebuilt
-from YouTube on every boot.
+Events are simpler: one fetch of each calendar's iCalendar feed every 15
+minutes, parsed in place — no API key, no quota, no per-event classification.
+
+Architecturally each feature is one Nest module (`src/livestream`, `src/events`)
+with a controller over an in-memory state map; there is no database. State is
+rebuilt from the upstream feeds on every boot.
 
 The C4 diagrams in [`docs/architecture`](docs/architecture) say the same thing at
 each level the [OHF architecture standards](https://standards.openhomefoundation.org/architecture/c4-documentation/)
