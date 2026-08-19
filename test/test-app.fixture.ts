@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 import { AppGateway } from '../src/app.gateway';
+import { EventsModule } from '../src/events';
 import { HealthModule } from '../src/health';
 import { getVersionInfo } from '../src/health/version';
 import { LivestreamModule } from '../src/livestream';
@@ -38,14 +39,16 @@ export interface TestAppOptions {
 }
 
 /**
- * One channel is enough for every suite that uses this fixture: none of them
- * assert on channel content, they just need a valid list so the app boots.
+ * One channel (and one calendar) is enough for every suite that uses this
+ * fixture: none of them assert on content, they just need valid lists so the
+ * app boots.
  */
 const CHANNELS = 'FixtureAlpha:fixture-alpha';
+const CALENDARS = 'cal-fixture:fixture-events';
 
 /**
- * Minimal stand-ins for the two upstreams the livestream service talks to on
- * startup: enough for discovery to complete without reaching the network.
+ * Minimal stand-ins for the upstreams the polling services talk to on
+ * startup: enough for their first sweeps to complete without the network.
  */
 const fetchStub = (input: unknown): Response => {
   const url = new URL(String(input));
@@ -54,6 +57,12 @@ const fetchStub = (input: unknown): Response => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
+  }
+  if (url.hostname === 'api.luma.com') {
+    return new Response(
+      'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Fixture Events\r\nEND:VCALENDAR',
+      { status: 200, headers: { 'content-type': 'text/calendar' } },
+    );
   }
   return new Response(
     '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -82,11 +91,13 @@ export const startTestApp = async ({
           () => ({
             YOUTUBE_API_KEY: 'test-key',
             LIVESTREAM_CHANNELS: CHANNELS,
+            EVENTS_CALENDARS: CALENDARS,
           }),
         ],
       }),
       HealthModule.register({ version: getVersionInfo() }),
       LivestreamModule,
+      EventsModule,
     ],
     providers: [AppGateway],
   }).compile();

@@ -50,6 +50,10 @@ specification {
     technology 'Atom XML over HTTPS'
   }
 
+  relationship ical {
+    technology 'iCalendar over HTTPS'
+  }
+
   relationship api {
     technology 'HTTPS/JSON'
   }

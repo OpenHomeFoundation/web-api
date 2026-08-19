@@ -44,6 +44,8 @@ interface OpenApiDocument {
 }
 
 const RESPONSE_SCHEMA = 'LivestreamInfoResponse';
+const CALENDAR_SCHEMA = 'CalendarInfoResponse';
+const EVENT_SCHEMA = 'EventInfoResponse';
 
 const okSchema = (operation: Operation): Schema | undefined =>
   operation.responses?.['200']?.content?.['application/json']?.schema;
@@ -185,6 +187,131 @@ describe('Swagger (e2e)', () => {
     });
   });
 
+  describe('the documented events endpoints', () => {
+    it('documents GET /events as an array of the calendar schema', () => {
+      const operation = document.paths['/events']?.get;
+
+      expect(operation).toBeDefined();
+      expect(operation.tags).toContain('events');
+      expect(operation.summary).toBeTruthy();
+      expect(okSchema(operation)).toEqual({
+        type: 'array',
+        items: { $ref: `#/components/schemas/${CALENDAR_SCHEMA}` },
+      });
+    });
+
+    it('documents GET /events/{slug} with its path parameter', () => {
+      const operation = document.paths['/events/{slug}']?.get;
+
+      expect(operation).toBeDefined();
+      expect(operation.tags).toContain('events');
+      expect(operation.summary).toBeTruthy();
+
+      const slug = operation.parameters?.find((p) => p.name === 'slug');
+      expect(slug).toMatchObject({ in: 'path', required: true });
+      expect(slug?.schema?.type).toBe('string');
+    });
+
+    it('documents the single-calendar 200 as the calendar schema', () => {
+      const operation = document.paths['/events/{slug}'].get;
+
+      expect(okSchema(operation)).toEqual({
+        $ref: `#/components/schemas/${CALENDAR_SCHEMA}`,
+      });
+    });
+
+    it('documents the 404 served for an unknown slug', () => {
+      const responses = document.paths['/events/{slug}'].get.responses;
+
+      expect(responses?.['404']).toBeDefined();
+      expect(responses?.['404'].description).toBeTruthy();
+    });
+  });
+
+  describe(`the ${CALENDAR_SCHEMA} and ${EVENT_SCHEMA} schemas`, () => {
+    let calendar: Schema;
+    let event: Schema;
+
+    beforeAll(() => {
+      const schemas = document.components?.schemas ?? {};
+      const foundCalendar = schemas[CALENDAR_SCHEMA];
+      const foundEvent = schemas[EVENT_SCHEMA];
+      if (!foundCalendar || !foundEvent) {
+        throw new Error(
+          `${CALENDAR_SCHEMA} or ${EVENT_SCHEMA} is missing from the document`,
+        );
+      }
+      calendar = foundCalendar;
+      event = foundEvent;
+    });
+
+    it('documents exactly the calendar fields the endpoints serve', () => {
+      expect(Object.keys(calendar.properties ?? {}).sort()).toEqual([
+        'calendar',
+        'calendarName',
+        'events',
+        'updatedAt',
+      ]);
+      expect([...(calendar.required ?? [])].sort()).toEqual([
+        'calendar',
+        'calendarName',
+        'events',
+        'updatedAt',
+      ]);
+      expect(calendar.properties?.events).toMatchObject({
+        type: 'array',
+        items: { $ref: `#/components/schemas/${EVENT_SCHEMA}` },
+      });
+    });
+
+    it('documents exactly the event fields the endpoints serve', () => {
+      expect(Object.keys(event.properties ?? {}).sort()).toEqual(
+        [
+          'id',
+          'summary',
+          'start',
+          'end',
+          'description',
+          'location',
+          'url',
+          'host',
+          'latitude',
+          'longitude',
+          'status',
+        ].sort(),
+      );
+    });
+
+    it('requires only the event fields that are always served', () => {
+      expect([...(event.required ?? [])].sort()).toEqual([
+        'id',
+        'start',
+        'summary',
+      ]);
+    });
+
+    it('documents status as the enum the service can report', () => {
+      expect(event.properties?.status.enum).toEqual([
+        'confirmed',
+        'tentative',
+        'cancelled',
+      ]);
+    });
+
+    it('describes every field of both schemas', () => {
+      for (const schema of [calendar, event]) {
+        for (const [name, property] of Object.entries(
+          schema.properties ?? {},
+        )) {
+          expect({ name, described: Boolean(property.description) }).toEqual({
+            name,
+            described: true,
+          });
+        }
+      }
+    });
+  });
+
   describe('the documented health endpoints', () => {
     it.each(['/__lbheartbeat__', '/__heartbeat__', '/__version__'])(
       'documents GET %s',
@@ -218,6 +345,8 @@ describe('Swagger (e2e)', () => {
       '/__heartbeat__',
       '/__lbheartbeat__',
       '/__version__',
+      '/events',
+      '/events/{slug}',
       '/livestream',
       '/livestream/{slug}',
     ]);
