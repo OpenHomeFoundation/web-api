@@ -35,6 +35,8 @@ export interface EventInfo {
   location?: string;
   /** The event's Luma page. */
   url?: string;
+  /** Who is hosting, as the description's "Hosted by …" line names them. */
+  host?: string;
   /** Venue latitude in decimal degrees, when the feed carries coordinates. */
   latitude?: number;
   /** Venue longitude in decimal degrees, when the feed carries coordinates. */
@@ -87,6 +89,14 @@ const DATE_PATTERN = /^(\d{4})(\d{2})(\d{2})$/;
 const LUMA_LINK_PATTERN =
   /https:\/\/(?:www\.)?(?:luma\.com|lu\.ma)\/[^\s"'<>]+/;
 
+/**
+ * The host is also only in the description, as the templated final line
+ * "Hosted by {NAME}" — where {NAME} may list several people ("AIsling Krewer
+ * & Liam Krewer"). Anchored to the last line so a stray "Hosted by" inside
+ * free-form text cannot match; events without the line simply have no host.
+ */
+const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
+
 const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
 
@@ -102,6 +112,7 @@ const EVENT_INFO_FIELDS: Record<keyof EventInfo, true> = {
   description: true,
   location: true,
   url: true,
+  host: true,
   latitude: true,
   longitude: true,
   status: true,
@@ -506,6 +517,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       url:
         text('URL') ??
         (description ? LUMA_LINK_PATTERN.exec(description)?.[0] : undefined),
+      host: description ? HOST_PATTERN.exec(description)?.[1] : undefined,
       ...geo,
       status: (EVENT_STATUSES as readonly string[]).includes(status ?? '')
         ? (status as EventStatus)

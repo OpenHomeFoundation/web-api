@@ -174,6 +174,7 @@ describe('EventsService', () => {
           'Get up-to-date information at: https://luma.com/n5mzdtvb\n\nHosted by the OHF',
         location: '26 Wexford St, Dublin, Ireland',
         url: 'https://luma.com/n5mzdtvb',
+        host: 'the OHF',
         latitude: 53.336691,
         longitude: -6.26573,
         status: 'tentative',
@@ -280,6 +281,53 @@ describe('EventsService', () => {
       const service = await start();
 
       expect(service.getCalendar(HA.slug).events[0].url).toBeUndefined();
+    });
+
+    it('extracts several hosts from the "Hosted by" line as one string', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-hosts', {
+            DESCRIPTION:
+              'Get up-to-date information at: https://luma.com/cqime8fa\\n\\nHosted by AIsling Krewer & Liam Krewer',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].host).toBe(
+        'AIsling Krewer & Liam Krewer',
+      );
+    });
+
+    it('serves no host when the description has no "Hosted by" line', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-nohost', {
+            DESCRIPTION:
+              'Find more information on https://luma.com/homeassistant',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].host).toBeUndefined();
+    });
+
+    it('only reads a host off the final line, not free-form text', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-midtext', {
+            DESCRIPTION:
+              'Last year was Hosted by someone else entirely\\nCome along!',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].host).toBeUndefined();
     });
 
     it('omits coordinates when GEO is malformed', async () => {

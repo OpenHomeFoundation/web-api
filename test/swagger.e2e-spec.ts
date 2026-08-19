@@ -274,6 +274,7 @@ describe('Swagger (e2e)', () => {
           'description',
           'location',
           'url',
+          'host',
           'latitude',
           'longitude',
           'status',

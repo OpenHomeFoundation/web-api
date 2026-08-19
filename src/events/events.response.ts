@@ -86,6 +86,16 @@ export class EventInfoResponse implements EventInfo {
 
   @ApiProperty({
     description:
+      'Who is hosting, as the description\'s "Hosted by …" line names them — ' +
+      'possibly several people ("AIsling Krewer & Liam Krewer"). Absent when ' +
+      'the feed does not name one.',
+    example: 'Missy Quarry',
+    required: false,
+  })
+  host?: string;
+
+  @ApiProperty({
+    description:
       'Venue latitude in decimal degrees, when the feed carries coordinates.',
     example: 53.336691,
     required: false,

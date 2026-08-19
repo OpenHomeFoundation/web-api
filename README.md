@@ -73,6 +73,7 @@ An events calendar entry looks like this:
       "description": "Get up-to-date information at: https://luma.com/n5mzdtvb",
       "location": "26 Wexford St, Portobello, Dublin, D02 HX93, Ireland",
       "url": "https://luma.com/n5mzdtvb",
+      "host": "Missy Quarry",
       "latitude": 53.336691,
       "longitude": -6.26573,
       "status": "tentative"
@@ -85,8 +86,9 @@ An events calendar entry looks like this:
 Events are everything the calendar's Luma feed advertises — past ones included,
 sorted soonest first — so the consumer decides the window it shows. Times are
 UTC; an all-day event carries a bare `YYYY-MM-DD` date instead. `url` is the
-event's Luma page. As with livestreams, `updatedAt` moves only when the served
-content changes.
+event's Luma page, and `host` is who is hosting — both lifted from the feed's
+templated description, which is the only place Luma carries them. As with
+livestreams, `updatedAt` moves only when the served content changes.
 
 Every response carries the security headers [helmet](https://helmetjs.github.io)
 applies by default, including a `Content-Security-Policy`, `nosniff`, and HSTS.

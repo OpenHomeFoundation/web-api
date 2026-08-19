@@ -274,6 +274,7 @@ describe('Events (e2e)', () => {
         description: `Get up-to-date information at: ${fixture.lumaUrl}\n\nHosted by the fixture`,
         location: '26 Wexford St, Dublin, Ireland',
         url: fixture.lumaUrl,
+        host: 'the fixture',
         latitude: 53.336691,
         longitude: -6.26573,
         status: 'confirmed',
