@@ -1,10 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-import { CalendarInfo, EventInfo, EventStatus } from './events.service';
+import {
+  CalendarInfo,
+  EVENT_STATUSES,
+  EventInfo,
+  EventStatus,
+} from './events.service';
 
 /**
- * Every member of the status union, with what it means. Typed as a Record so a
- * new EventStatus fails to compile until it is documented here.
+ * What each member of the status union means. The values themselves live in
+ * the service's EVENT_STATUSES, the single source of truth for parsing and
+ * this schema alike; the Record keys make a status added there fail to compile
+ * until it is documented here.
  */
 const STATUS_DESCRIPTIONS: Record<EventStatus, string> = {
   confirmed: 'the event is definitely happening',
@@ -12,13 +19,9 @@ const STATUS_DESCRIPTIONS: Record<EventStatus, string> = {
   cancelled: 'the event was called off',
 };
 
-export const EVENT_STATUSES = Object.keys(STATUS_DESCRIPTIONS) as EventStatus[];
-
-const STATUS_DESCRIPTION = `The event's iCalendar status: ${Object.entries(
-  STATUS_DESCRIPTIONS,
-)
-  .map(([status, meaning]) => `\`${status}\` — ${meaning}`)
-  .join('; ')}. Absent when the feed does not carry one.`;
+const STATUS_DESCRIPTION = `The event's iCalendar status: ${EVENT_STATUSES.map(
+  (status) => `\`${status}\` — ${STATUS_DESCRIPTIONS[status]}`,
+).join('; ')}. Absent when the feed does not carry one.`;
 
 /**
  * The documented shape of one event.
@@ -99,7 +102,7 @@ export class EventInfoResponse implements EventInfo {
 
   @ApiProperty({
     description: STATUS_DESCRIPTION,
-    enum: EVENT_STATUSES,
+    enum: [...EVENT_STATUSES],
     example: 'confirmed',
     required: false,
   })

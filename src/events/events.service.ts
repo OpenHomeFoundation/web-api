@@ -9,7 +9,14 @@ import {
 
 import { Calendar, EVENTS_CALENDARS, icsUrl } from './events.calendars';
 
-export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
+/**
+ * The iCalendar STATUS values the spec defines — the single source of truth
+ * for both parsing and the documented schema (events.response.ts derives its
+ * enum and descriptions from it).
+ */
+export const EVENT_STATUSES = ['confirmed', 'tentative', 'cancelled'] as const;
+
+export type EventStatus = (typeof EVENT_STATUSES)[number];
 
 export interface EventInfo {
   /** Stable event identifier, the feed's UID (e.g. "evt-…@events.lu.ma"). */
@@ -80,14 +87,37 @@ const DATE_PATTERN = /^(\d{4})(\d{2})(\d{2})$/;
 const LUMA_LINK_PATTERN =
   /https:\/\/(?:www\.)?(?:luma\.com|lu\.ma)\/[^\s"'<>]+/;
 
-const EVENT_STATUSES: readonly EventStatus[] = [
-  'confirmed',
-  'tentative',
-  'cancelled',
-];
-
 const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
+
+/**
+ * Every EventInfo field, typed as a Record so a field added to the interface
+ * fails to compile until eventsEqual compares it too.
+ */
+const EVENT_INFO_FIELDS: Record<keyof EventInfo, true> = {
+  id: true,
+  summary: true,
+  start: true,
+  end: true,
+  description: true,
+  location: true,
+  url: true,
+  latitude: true,
+  longitude: true,
+  status: true,
+};
+
+const EVENT_FIELDS = Object.keys(EVENT_INFO_FIELDS) as (keyof EventInfo)[];
+
+/**
+ * Field-by-field equality over two already-sorted event lists, so an unchanged
+ * feed is detected without serialising both arrays on every refresh.
+ */
+const eventsEqual = (a: EventInfo[], b: EventInfo[]): boolean =>
+  a.length === b.length &&
+  a.every((event, index) =>
+    EVENT_FIELDS.every((field) => event[field] === b[index][field]),
+  );
 
 /**
  * Undo iCalendar text escaping: \n (either case) is a newline, and an escaped
@@ -365,7 +395,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
     const changed =
       !previous ||
       previous.calendarName !== calendarName ||
-      JSON.stringify(previous.events) !== JSON.stringify(events);
+      !eventsEqual(previous.events, events);
 
     this.state.set(calendar.slug, {
       calendar: calendar.slug,
