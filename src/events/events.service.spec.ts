@@ -262,13 +262,32 @@ describe('EventsService', () => {
       luma.serve(
         HA.calendarId,
         vcalendar('HA', [
-          lumaEvent('evt-luma', { DESCRIPTION: 'See https://lu.ma/abc123.' }),
+          lumaEvent('evt-luma', { DESCRIPTION: 'See https://lu.ma/abc123' }),
         ]),
       );
       const service = await start();
 
       expect(service.getCalendar(HA.slug).events[0].url).toBe(
-        'https://lu.ma/abc123.',
+        'https://lu.ma/abc123',
+      );
+    });
+
+    it('does not capture sentence punctuation trailing the link', async () => {
+      // The link is lifted out of prose, so a description ending its sentence
+      // right after the URL must not turn the full stop into a dead link.
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-punct', {
+            DESCRIPTION:
+              'Details at https://luma.com/n5mzdtvb.\n\nHosted by the OHF',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].url).toBe(
+        'https://luma.com/n5mzdtvb',
       );
     });
 

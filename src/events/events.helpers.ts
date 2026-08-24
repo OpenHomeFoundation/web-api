@@ -16,9 +16,12 @@ const DATE_PATTERN = /^(\d{4})(\d{2})(\d{2})$/;
  * Luma does not export a URL property; the event's page link only appears
  * inside the DESCRIPTION text ("Get up-to-date information at: https://…").
  * Matched against the unescaped text, where \n has become a real newline.
+ * Because the link is lifted out of prose, the final character class refuses
+ * sentence punctuation, so "…at: https://luma.com/x." captures the link and
+ * not the full stop.
  */
 export const LUMA_LINK_PATTERN =
-  /https:\/\/(?:www\.)?(?:luma\.com|lu\.ma)\/[^\s"'<>]+/;
+  /https:\/\/(?:www\.)?(?:luma\.com|lu\.ma)\/[^\s"'<>]*[^\s"'<>.,;:!?)\]]/;
 
 /**
  * The host is also only in the description, as the templated final line
