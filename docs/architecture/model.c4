@@ -61,6 +61,16 @@ model {
     }
   }
 
+  luma = external 'Luma' {
+    technology 'iCalendar over HTTPS'
+    description '''
+      Hosts the foundation's community-event calendars. Their public iCalendar
+      exports (api.luma.com/ics/get?entity=calendar&id=…) are the source of
+      every event this API serves — unauthenticated and unmetered, so unlike
+      YouTube there is no quota to design around.
+    '''
+  }
+
   // The two elements below are described by the `deployments` repository
   // (Terraform Cloud workspace "web-api"), not by this one.
   edge = external 'Cloudflare' {
@@ -118,15 +128,17 @@ model {
     description '''
       Public, read-only HTTP API for openhomefoundation.org. It reports the
       livestream status of the foundation's YouTube channels — live, upcoming,
-      recently ended, or nothing — so the project websites can show it without
-      each of them talking to YouTube.
+      recently ended, or nothing — and the events of the foundation's Luma
+      calendars, so the project websites can show both without each of them
+      talking to YouTube or Luma.
     '''
 
     api = container 'Web API service' {
       technology 'NestJS 11 / Express on Node 24, port 3000'
       description '''
         One process, one container image. It answers HTTP requests and runs the
-        two YouTube polling loops on timers side by side.
+        polling loops — two against YouTube, one against Luma — on timers side
+        by side.
 
         There is no database and no cache container: all state is in the
         process, and it is rebuilt from YouTube on every boot. That is the
@@ -159,6 +171,15 @@ model {
         '''
       }
 
+      eventsController = component 'Events controller' {
+        technology 'src/events/events.controller.ts'
+        description '''
+          GET /events and GET /events/:slug. Like the livestream endpoints, a
+          pure read of already parsed state: a request never triggers a call to
+          Luma, and an unknown slug is a 404.
+        '''
+      }
+
       healthController = component 'Health controller' {
         technology 'src/health/health.controller.ts'
         description '''
@@ -178,6 +199,15 @@ model {
         '''
       }
 
+      calendarConfig = component 'Calendar configuration' {
+        technology 'src/events/events.calendars.ts'
+        description '''
+          Parses EVENTS_CALENDARS into validated calendarId:slug pairs once, at
+          boot — the same contract as the channel list: configuration change,
+          not code change, and malformed configuration fails startup.
+        '''
+      }
+
       livestreamService = component 'Livestream service' {
         technology 'src/livestream/livestream.service.ts'
         description '''
@@ -185,6 +215,41 @@ model {
           5 minutes from the feeds, reconciliation every 10 seconds over only
           the streams that are live or start within 15 minutes, and per channel
           "live, else soonest upcoming, else one that ended within 24 hours".
+        '''
+      }
+
+      eventsService = component 'Events service' {
+        technology 'src/events/events.service.ts'
+        description '''
+          Refreshes each calendar every 15 minutes through the Luma client,
+          parses the feed in place, and keeps the last successfully parsed
+          content — a calendar whose fetch fails serves stale events rather
+          than none.
+        '''
+      }
+
+      youtubeClient = component 'YouTube client' {
+        technology 'src/youtube/youtube.client.ts'
+        description '''
+          The low-level YouTube surface: the per-channel Atom feeds and the
+          Data API (channels.list / videos.list), including the API key
+          handling. The one place the YouTube transport can change.
+        '''
+      }
+
+      lumaClient = component 'Luma client' {
+        technology 'src/luma/luma.client.ts'
+        description '''
+          The low-level Luma surface: fetches and validates a calendar's public
+          iCalendar export. The one place the Luma transport can change.
+        '''
+      }
+
+      eventsState = store 'Calendar state' {
+        technology 'In-process Map'
+        description '''
+          The ready-to-serve event list per calendar slug. Not a database for
+          the same reason channel state is not: one refresh rebuilds it.
         '''
       }
 
@@ -221,11 +286,17 @@ model {
       // middleware in registration order, so the security headers and the CORS
       // decision really do come first.
       bootstrap -[inproc]-> livestreamController 'routes /livestream'
+      bootstrap -[inproc]-> eventsController 'routes /events'
       bootstrap -[inproc]-> healthController 'routes the probe endpoints'
       bootstrap -[inproc]-> gateway 'admits handshakes from the configured origins'
       livestreamController -[inproc]-> livestreamService 'reads the current status'
       livestreamService -[inproc]-> state 'derives from, and writes back'
       channelConfig -[inproc]-> livestreamService 'injects the validated channel list at boot'
+      eventsController -[inproc]-> eventsService 'reads the parsed events'
+      eventsService -[inproc]-> eventsState 'parses into, and reads back'
+      calendarConfig -[inproc]-> eventsService 'injects the validated calendar list at boot'
+      livestreamService -[inproc]-> youtubeClient 'fetches feeds and classifies videos through'
+      eventsService -[inproc]-> lumaClient 'fetches calendar feeds through'
     }
   }
 
@@ -238,8 +309,9 @@ model {
   platform -[api]-> bootstrap 'forwards to the running task on port 3000'
   platform -[https]-> healthController 'probes the app, and the container probes itself'
 
-  livestreamService -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
-  livestreamService -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'
+  youtubeClient -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
+  youtubeClient -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'
+  lumaClient -[ical]-> luma 'fetches each calendar feed every 15 min; keeps the last good content on failure'
 
   // Delivery path, as the release workflow performs it.
   engineer -> github 'merges, and publishes a release'

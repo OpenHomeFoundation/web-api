@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import {
   Channel,
   LIVESTREAM_CHANNELS,
-  feedUrl,
   parseChannels,
 } from './livestream.channels';
 
@@ -273,24 +272,6 @@ describe('parseChannels', () => {
         'LIVESTREAM_CHANNELS[0] "esphomeio:BAD" slug "BAD"',
       );
     });
-  });
-});
-
-describe('feedUrl', () => {
-  it('builds the canonical YouTube RSS feed URL for a channel ID', () => {
-    expect(feedUrl('UCbBg8TgHNMV1Z6qYrqbUlXA')).toBe(
-      'https://www.youtube.com/feeds/videos.xml?channel_id=UCbBg8TgHNMV1Z6qYrqbUlXA',
-    );
-  });
-
-  it('places the channel ID in the only query parameter, channel_id', () => {
-    const url = new URL(feedUrl('UC_test-123'));
-
-    expect(url.origin + url.pathname).toBe(
-      'https://www.youtube.com/feeds/videos.xml',
-    );
-    expect(url.searchParams.get('channel_id')).toBe('UC_test-123');
-    expect([...url.searchParams.keys()]).toEqual(['channel_id']);
   });
 });
 

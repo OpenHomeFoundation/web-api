@@ -29,6 +29,7 @@ views {
       edge,
       webapi,
       youtube,
+      luma,
       platform
 
     autoLayout TopBottom
@@ -54,6 +55,7 @@ views {
       edge,
       youtube,
       youtube.*,
+      luma,
       platform
 
     autoLayout TopBottom
@@ -65,8 +67,8 @@ views {
       Inside the process. Two things are worth reading off this view: every
       request passes through Bootstrap first, which is where the security
       headers and the CORS decision happen; and the HTTP path never reaches
-      YouTube — it reads state the polling loops maintain, so a slow or failing
-      YouTube cannot slow down a response.
+      YouTube or Luma — it reads state the polling loops maintain, so a slow or
+      failing upstream cannot slow down a response.
     '''
 
     include
@@ -75,6 +77,7 @@ views {
       edge,
       youtube,
       youtube.*,
+      luma,
       platform
 
     autoLayout TopBottom

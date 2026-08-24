@@ -23,14 +23,6 @@ const ENV_VAR = 'LIVESTREAM_CHANNELS';
 const FORMAT = 'expected a comma-separated list of handle:slug pairs';
 
 /**
- * Canonical YouTube channel RSS feed URL — the discovery source for livestream
- * state. Fetching it costs no YouTube Data API quota, unlike the videos.list
- * lookup that classifies the videos it returns.
- */
-export const feedUrl = (channelId: string): string =>
-  `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-
-/**
  * Parse the tracked channels out of the LIVESTREAM_CHANNELS environment
  * variable, e.g. `home_assistant:home-assistant,esphomeio:esphome`. Adding or
  * removing a project is a config change, not a code change.
