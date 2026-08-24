@@ -1,5 +1,6 @@
 import { Logger, NotFoundException } from '@nestjs/common';
 
+import { LumaClient } from '../luma';
 import { Calendar } from './events.calendars';
 import { EventsService } from './events.service';
 
@@ -107,7 +108,7 @@ describe('EventsService', () => {
   let now: number;
 
   const createService = (calendars: Calendar[] = CALENDARS): EventsService => {
-    const service = new EventsService(calendars);
+    const service = new EventsService(calendars, new LumaClient());
     services.push(service);
     return service;
   };

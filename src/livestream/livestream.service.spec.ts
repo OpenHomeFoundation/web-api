@@ -1,7 +1,8 @@
 import { Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { Channel, feedUrl } from './livestream.channels';
+import { feedUrl, YouTubeClient } from '../youtube';
+import { Channel } from './livestream.channels';
 import { LivestreamService } from './livestream.service';
 
 const TICK_MS = 10_000;
@@ -323,7 +324,7 @@ describe('LivestreamService', () => {
     env: Record<string, string | undefined> = { YOUTUBE_API_KEY: 'test-key' },
   ): LivestreamService => {
     const config = { get: (key: string) => env[key] } as ConfigService;
-    const service = new LivestreamService(config, CHANNELS);
+    const service = new LivestreamService(CHANNELS, new YouTubeClient(config));
     services.push(service);
     return service;
   };

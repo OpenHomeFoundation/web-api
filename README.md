@@ -208,7 +208,9 @@ minutes, parsed in place — no API key, no quota, no per-event classification.
 
 Architecturally each feature is one Nest module (`src/livestream`, `src/events`)
 with a controller over an in-memory state map; there is no database. State is
-rebuilt from the upstream feeds on every boot.
+rebuilt from the upstream feeds on every boot. The low-level upstream calls
+live in dedicated client modules (`src/youtube`, `src/luma`) the feature
+modules import, so each external API is talked to from exactly one place.
 
 The C4 diagrams in [`docs/architecture`](docs/architecture) say the same thing at
 each level the [OHF architecture standards](https://standards.openhomefoundation.org/architecture/c4-documentation/)

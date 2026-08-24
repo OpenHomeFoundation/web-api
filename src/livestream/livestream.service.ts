@@ -6,9 +6,9 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-
-import { Channel, LIVESTREAM_CHANNELS, feedUrl } from './livestream.channels';
+import { watchUrl, YouTubeClient, YouTubeItem } from '../youtube';
+import { Channel, LIVESTREAM_CHANNELS } from './livestream.channels';
+import { parseAtomFeed, stackOf } from './livestream.helpers';
 
 export type LivestreamStatus = 'live' | 'upcoming' | 'past' | 'none';
 
@@ -29,45 +29,6 @@ export interface LivestreamInfo {
   updatedAt: string;
 }
 
-/** One entry from a channel's RSS feed. */
-interface FeedEntry {
-  videoId: string;
-  /** Atom <updated>; YouTube bumps it when a video's metadata changes. */
-  updated: string;
-}
-
-/** A channel's RSS feed: its display name plus its recent entries. */
-interface Feed {
-  /** Channel-level <title>, i.e. the channel's display name. */
-  title: string;
-  entries: FeedEntry[];
-}
-
-/**
- * The parts of a YouTube Data API list item this service reads.
- *
- * Only the fields we request a `part` for are modelled, and everything but `id`
- * is optional: a video that is not a broadcast has no `liveStreamingDetails`,
- * and a broadcast carries only the timestamps its lifecycle has reached.
- */
-interface YouTubeItem {
-  id: string;
-  snippet?: {
-    title?: string;
-    channelId?: string;
-  };
-  liveStreamingDetails?: {
-    scheduledStartTime?: string;
-    actualStartTime?: string;
-    actualEndTime?: string;
-  };
-}
-
-/** A YouTube Data API list response, pared down to what we read. */
-interface YouTubeListResponse {
-  items?: YouTubeItem[];
-}
-
 /** A livestream video we are tracking the state of. */
 interface TrackedVideo {
   videoId: string;
@@ -77,7 +38,6 @@ interface TrackedVideo {
   actualEndTime?: string;
 }
 
-const API_BASE = 'https://www.googleapis.com/youtube/v3';
 const PAST_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Re-scan channels' RSS feeds to discover newly scheduled/published videos. */
 const DISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
@@ -89,47 +49,6 @@ const DISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
 const RECONCILE_TICK_MS = 10 * 1000;
 /** Treat an upcoming stream as "imminent" within this window of its start. */
 const SOON_WINDOW_MS = 15 * 60 * 1000;
-
-const watchUrl = (videoId: string) =>
-  `https://www.youtube.com/watch?v=${videoId}`;
-
-const entryPattern = /<entry>([\s\S]*?)<\/entry>/g;
-const videoIdPattern = /<yt:videoId>([^<]+)<\/yt:videoId>/;
-const updatedPattern = /<updated>([^<]+)<\/updated>/;
-const titlePattern = /<title>([^<]*)<\/title>/;
-
-const XML_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-};
-
-/**
- * Decode the XML entities an Atom element may contain, so a channel named
- * "Nabu Casa's" is not served as "Nabu Casa&#39;s". Resolved in a single pass so
- * an escaped entity ("&amp;amp;") decodes to "&amp;" rather than "&".
- */
-const decodeXmlText = (value: string): string =>
-  value.replace(
-    /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g,
-    (match, ref: string) => {
-      if (!ref.startsWith('#')) {
-        return XML_ENTITIES[ref.toLowerCase()] ?? match;
-      }
-      const code =
-        ref[1] === 'x' || ref[1] === 'X'
-          ? parseInt(ref.slice(2), 16)
-          : parseInt(ref.slice(1), 10);
-      return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
-        ? String.fromCodePoint(code)
-        : match;
-    },
-  );
-
-const stackOf = (err: unknown): string =>
-  err instanceof Error ? (err.stack ?? err.message) : String(err);
 
 @Injectable()
 export class LivestreamService implements OnModuleInit, OnModuleDestroy {
@@ -155,8 +74,8 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   private reconcileRunning = false;
 
   constructor(
-    private readonly config: ConfigService,
     @Inject(LIVESTREAM_CHANNELS) private readonly channels: readonly Channel[],
+    private readonly youtube: YouTubeClient,
   ) {
     this.channelsBySlug = new Map(this.channels.map((c) => [c.slug, c]));
   }
@@ -220,14 +139,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fetchChannelId(channel: Channel): Promise<string> {
-    const data = await this.apiGet('channels', {
-      part: 'id',
-      forHandle: channel.handle,
-    });
-    const id: string | undefined = data.items?.[0]?.id;
-    if (!id) {
-      throw new Error(`Channel not found for handle @${channel.handle}`);
-    }
+    const id = await this.youtube.channelIdForHandle(channel.handle);
     this.channelIds.set(channel.slug, id);
     this.slugByChannelId.set(id, channel.slug);
     return id;
@@ -288,7 +200,9 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
 
   private async discoverChannel(channel: Channel): Promise<void> {
     const channelId = await this.resolveChannelId(channel);
-    const { title, entries } = await this.fetchFeed(channelId);
+    const { title, entries } = parseAtomFeed(
+      await this.youtube.fetchChannelFeed(channelId),
+    );
 
     // Display names come from the channel itself rather than config, so they
     // stay right through a rebrand without a deploy.
@@ -363,7 +277,7 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
   ): Promise<Set<string>> {
     const touched = new Set<string>();
     const unreturned = new Map(slugByVideoId);
-    const items = await this.videoDetails([...slugByVideoId.keys()]);
+    const items = await this.youtube.videoDetails([...slugByVideoId.keys()]);
 
     for (const item of items) {
       unreturned.delete(item.id);
@@ -596,82 +510,5 @@ export class LivestreamService implements OnModuleInit, OnModuleDestroy {
     }
 
     return { ...base, status: 'none' };
-  }
-
-  /** Fetch a channel's RSS feed: title and recent entries (free, no quota). */
-  private async fetchFeed(channelId: string): Promise<Feed> {
-    const res = await fetch(feedUrl(channelId), {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) {
-      throw new Error(`Feed request failed: ${res.status}`);
-    }
-    const xml = await res.text();
-    // A 200 carrying something other than the feed (an error page, a proxy
-    // interstitial) would otherwise read as "this channel has no videos" and
-    // evict tracked streams, and its <title> would be served as the channel
-    // name. Treat it as a failed fetch so prior state survives instead.
-    if (!xml.includes('<feed')) {
-      throw new Error('Feed response was not an Atom feed');
-    }
-
-    const entries: FeedEntry[] = [];
-    for (const [, entry] of xml.matchAll(entryPattern)) {
-      const videoId = videoIdPattern.exec(entry)?.[1];
-      if (videoId) {
-        entries.push({
-          videoId,
-          updated: updatedPattern.exec(entry)?.[1] ?? '',
-        });
-      }
-    }
-
-    // The channel's own <title> precedes the entries; an entry's <title> is the
-    // video's, so only look before the first one.
-    const [head] = xml.split('<entry>');
-    const title = titlePattern.exec(head)?.[1] ?? '';
-    return { title: decodeXmlText(title).trim(), entries };
-  }
-
-  private async videoDetails(videoIds: string[]): Promise<YouTubeItem[]> {
-    const unique = [...new Set(videoIds)];
-    if (unique.length === 0) {
-      return [];
-    }
-    const items: YouTubeItem[] = [];
-    for (let i = 0; i < unique.length; i += 50) {
-      const data = await this.apiGet('videos', {
-        part: 'snippet,liveStreamingDetails',
-        id: unique.slice(i, i + 50).join(','),
-      });
-      items.push(...(data.items ?? []));
-    }
-    return items;
-  }
-
-  private async apiGet(
-    path: string,
-    params: Record<string, string>,
-  ): Promise<YouTubeListResponse> {
-    const key = this.config.get<string>('YOUTUBE_API_KEY');
-    if (!key) {
-      throw new Error('YOUTUBE_API_KEY is not set');
-    }
-    const url = new URL(`${API_BASE}/${path}`);
-    for (const [name, value] of Object.entries(params)) {
-      url.searchParams.set(name, value);
-    }
-    url.searchParams.set('key', key);
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(
-        `YouTube API ${path} request failed: ${res.status} ${res.statusText}` +
-          (body ? ` - ${body}` : ''),
-      );
-    }
-    // Asserted rather than validated: the response is untrusted JSON, and every
-    // field YouTubeListResponse declares is optional, so reads narrow anyway.
-    return (await res.json()) as YouTubeListResponse;
   }
 }

@@ -1,9 +1,4 @@
-import {
-  Calendar,
-  EVENTS_CALENDARS,
-  icsUrl,
-  parseCalendars,
-} from './events.calendars';
+import { Calendar, EVENTS_CALENDARS, parseCalendars } from './events.calendars';
 
 const FORMAT = 'expected a comma-separated list of calendarId:slug pairs';
 
@@ -178,22 +173,6 @@ describe('parseCalendars', () => {
         'EVENTS_CALENDARS has two calendars pointing at the same ID "cal-alpha"',
       );
     });
-  });
-});
-
-describe('icsUrl', () => {
-  it("builds Luma's iCalendar export URL for a calendar", () => {
-    expect(icsUrl('cal-6Tm2FkWzoBpLXWr')).toBe(
-      'https://api.luma.com/ics/get?entity=calendar&id=cal-6Tm2FkWzoBpLXWr',
-    );
-  });
-
-  it('URL-encodes the calendar ID', () => {
-    // parseCalendars never lets one through, but the function should still be
-    // safe on its own.
-    expect(icsUrl('cal a&b')).toBe(
-      'https://api.luma.com/ics/get?entity=calendar&id=cal%20a%26b',
-    );
   });
 });
 

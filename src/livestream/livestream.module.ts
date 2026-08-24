@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { YouTubeModule } from '../youtube';
 import { LIVESTREAM_CHANNELS, parseChannels } from './livestream.channels';
 import { LivestreamController } from './livestream.controller';
 import { LivestreamService } from './livestream.service';
 
 @Module({
+  imports: [YouTubeModule],
   controllers: [LivestreamController],
   providers: [
     {

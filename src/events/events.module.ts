@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { LumaModule } from '../luma';
 import { EVENTS_CALENDARS, parseCalendars } from './events.calendars';
 import { EventsController } from './events.controller';
 import { EventsService } from './events.service';
 
 @Module({
+  imports: [LumaModule],
   controllers: [EventsController],
   providers: [
     {

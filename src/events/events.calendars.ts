@@ -23,15 +23,6 @@ const ENV_VAR = 'EVENTS_CALENDARS';
 const FORMAT = 'expected a comma-separated list of calendarId:slug pairs';
 
 /**
- * Luma's iCalendar export for a calendar — the source of every event this API
- * serves. Public and unauthenticated; the calendar ID is the only input.
- */
-export const icsUrl = (calendarId: string): string =>
-  `https://api.luma.com/ics/get?entity=calendar&id=${encodeURIComponent(
-    calendarId,
-  )}`;
-
-/**
  * Parse the tracked calendars out of the EVENTS_CALENDARS environment
  * variable, e.g. `cal-6Tm2FkWzoBpLXWr:home-assistant-meetups`. Adding or
  * removing a calendar is a config change, not a code change.

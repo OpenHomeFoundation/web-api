@@ -221,9 +221,27 @@ model {
       eventsService = component 'Events service' {
         technology 'src/events/events.service.ts'
         description '''
-          Fetches each calendar's iCalendar feed every 15 minutes, parses it in
-          place, and keeps the last successfully parsed content — a calendar
-          whose fetch fails serves stale events rather than none.
+          Refreshes each calendar every 15 minutes through the Luma client,
+          parses the feed in place, and keeps the last successfully parsed
+          content — a calendar whose fetch fails serves stale events rather
+          than none.
+        '''
+      }
+
+      youtubeClient = component 'YouTube client' {
+        technology 'src/youtube/youtube.client.ts'
+        description '''
+          The low-level YouTube surface: the per-channel Atom feeds and the
+          Data API (channels.list / videos.list), including the API key
+          handling. The one place the YouTube transport can change.
+        '''
+      }
+
+      lumaClient = component 'Luma client' {
+        technology 'src/luma/luma.client.ts'
+        description '''
+          The low-level Luma surface: fetches and validates a calendar's public
+          iCalendar export. The one place the Luma transport can change.
         '''
       }
 
@@ -277,6 +295,8 @@ model {
       eventsController -[inproc]-> eventsService 'reads the parsed events'
       eventsService -[inproc]-> eventsState 'parses into, and reads back'
       calendarConfig -[inproc]-> eventsService 'injects the validated calendar list at boot'
+      livestreamService -[inproc]-> youtubeClient 'fetches feeds and classifies videos through'
+      eventsService -[inproc]-> lumaClient 'fetches calendar feeds through'
     }
   }
 
@@ -289,9 +309,9 @@ model {
   platform -[api]-> bootstrap 'forwards to the running task on port 3000'
   platform -[https]-> healthController 'probes the app, and the container probes itself'
 
-  livestreamService -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
-  livestreamService -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'
-  eventsService -[ical]-> luma 'fetches each calendar feed every 15 min; keeps the last good content on failure'
+  youtubeClient -[atom]-> feeds 'polls each channel feed every 5 min; skips the classify step when unchanged'
+  youtubeClient -[rest]-> dataApi 'resolves handles, and classifies changed or imminent videos'
+  lumaClient -[ical]-> luma 'fetches each calendar feed every 15 min; keeps the last good content on failure'
 
   // Delivery path, as the release workflow performs it.
   engineer -> github 'merges, and publishes a release'
