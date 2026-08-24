@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.2.0...v0.3.0) (2026-08-24)
+
+
+### Features
+
+* add /events endpoints serving Luma calendar events ([#54](https://github.com/OpenHomeFoundation/web-api/issues/54)) ([1fb253b](https://github.com/OpenHomeFoundation/web-api/commit/1fb253bd42d5cd4da147057b76a00f20676fdd52))
+
 ## [0.2.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.1.0...v0.2.0) (2026-07-29)
 
 
