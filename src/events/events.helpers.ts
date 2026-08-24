@@ -195,6 +195,14 @@ export const parseIcsDate = (
       return undefined;
     }
     const [, year, month, day] = date;
+    // Same round-trip check as the timed path below: a nonsense component
+    // (month 13) matches the pattern but must not be served as a date.
+    const dayMs = Date.UTC(Number(year), Number(month) - 1, Number(day));
+    if (
+      new Date(dayMs).toISOString().slice(0, 10) !== `${year}-${month}-${day}`
+    ) {
+      return undefined;
+    }
     return `${year}-${month}-${day}`;
   }
 

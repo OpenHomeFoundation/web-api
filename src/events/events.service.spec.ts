@@ -506,6 +506,24 @@ describe('EventsService', () => {
 
       expect(service.getCalendar(HA.slug).events).toEqual([]);
     });
+
+    it('rejects an all-day date whose components roll the calendar over', async () => {
+      // The bare-date path serves the regex captures directly, so without its
+      // own round-trip check "2025-02-30" would go out as an ISO date.
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          [
+            'DTSTART;VALUE=DATE:20250230',
+            'UID:evt-feb30',
+            'SUMMARY:February 30th',
+          ],
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events).toEqual([]);
+    });
   });
 
   describe('calendar metadata', () => {
