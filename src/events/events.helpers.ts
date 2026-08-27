@@ -61,7 +61,7 @@ export const extractAddress = (description: string): string[] => {
   return block
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && line !== ADDRESS_PLACEHOLDER);
+    .filter((line) => line !== '' && line !== ADDRESS_PLACEHOLDER);
 };
 
 export const stackOf = (err: unknown): string =>
