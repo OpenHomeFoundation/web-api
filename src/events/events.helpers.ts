@@ -31,6 +31,32 @@ export const LUMA_LINK_PATTERN =
  */
 export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
 
+/**
+ * The venue address is also templated into the description, as a block opened
+ * by an "Address:" line and closed by a blank line (or the end of the text):
+ *
+ *   Address:
+ *   AI Village
+ *   Hürth, Nordrhein-Westfalen
+ *   Germany
+ *
+ * Matched against the unescaped text. Anchored to a line start so prose
+ * mentioning an address mid-line cannot open the block.
+ */
+const ADDRESS_PATTERN = /(?:^|\n)Address:\n([\s\S]*?)(?:\n\n|$)/;
+
+/**
+ * The description's address block as one array item per line, trimmed, with
+ * blank lines dropped; undefined when the description carries no such block.
+ */
+export const extractAddress = (description: string): string[] | undefined => {
+  const lines = ADDRESS_PATTERN.exec(description)?.[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines?.length ? lines : undefined;
+};
+
 export const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
 
@@ -47,6 +73,7 @@ const EVENT_INFO_FIELDS: Record<keyof EventInfo, true> = {
   location: true,
   url: true,
   host: true,
+  address: true,
   latitude: true,
   longitude: true,
   status: true,
@@ -55,13 +82,26 @@ const EVENT_INFO_FIELDS: Record<keyof EventInfo, true> = {
 const EVENT_FIELDS = Object.keys(EVENT_INFO_FIELDS) as (keyof EventInfo)[];
 
 /**
+ * One field of two events compared by value: scalar fields by identity, array
+ * fields (address) element by element, since every refresh re-parses the feed
+ * into fresh arrays that must still count as unchanged.
+ */
+const fieldEquals = (a: unknown, b: unknown): boolean =>
+  Array.isArray(a) || Array.isArray(b)
+    ? Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, index) => item === b[index])
+    : a === b;
+
+/**
  * Field-by-field equality over two already-sorted event lists, so an unchanged
  * feed is detected without serialising both arrays on every refresh.
  */
 export const eventsEqual = (a: EventInfo[], b: EventInfo[]): boolean =>
   a.length === b.length &&
   a.every((event, index) =>
-    EVENT_FIELDS.every((field) => event[field] === b[index][field]),
+    EVENT_FIELDS.every((field) => fieldEquals(event[field], b[index][field])),
   );
 
 /**

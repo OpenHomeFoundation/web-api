@@ -47,7 +47,7 @@ const lumaEvent = (
     UID: `${uid}@events.lu.ma`,
     SUMMARY: 'Dublin - Hosted by the OHF',
     DESCRIPTION:
-      'Get up-to-date information at: https://luma.com/n5mzdtvb\\n\\nHosted by the OHF',
+      'Get up-to-date information at: https://luma.com/n5mzdtvb\\n\\nAddress:\\n26 Wexford St\\nDublin\\nIreland\\n\\nHosted by the OHF',
     LOCATION: '26 Wexford St\\, Dublin\\, Ireland',
     GEO: '53.336691;-6.26573',
     STATUS: 'TENTATIVE',
@@ -172,10 +172,11 @@ describe('EventsService', () => {
         start: '2026-06-04T17:30:00.000Z',
         end: '2026-06-04T20:30:00.000Z',
         description:
-          'Get up-to-date information at: https://luma.com/n5mzdtvb\n\nHosted by the OHF',
+          'Get up-to-date information at: https://luma.com/n5mzdtvb\n\nAddress:\n26 Wexford St\nDublin\nIreland\n\nHosted by the OHF',
         location: '26 Wexford St, Dublin, Ireland',
         url: 'https://luma.com/n5mzdtvb',
         host: 'the OHF',
+        address: ['26 Wexford St', 'Dublin', 'Ireland'],
         latitude: 53.336691,
         longitude: -6.26573,
         status: 'tentative',
@@ -348,6 +349,73 @@ describe('EventsService', () => {
       const service = await start();
 
       expect(service.getCalendar(HA.slug).events[0].host).toBeUndefined();
+    });
+
+    it('extracts the "Address:" block as one array item per line', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-address', {
+            DESCRIPTION:
+              'Get up-to-date information at: https://luma.com/1r5yocyq\\n\\nAddress:\\nAI Village\\nHürth\\, Nordrhein-Westfalen\\nGermany\\n\\nHosted by Andrej Friesen\\, Ann-Catherine Lêmoine & Theresa Heering',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([
+        'AI Village',
+        'Hürth, Nordrhein-Westfalen',
+        'Germany',
+      ]);
+    });
+
+    it('extracts an address block that runs to the end of the description', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-address-tail', {
+            DESCRIPTION:
+              'Get up-to-date information at: https://luma.com/1r5yocyq\\n\\nAddress:\\nAI Village\\nGermany',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([
+        'AI Village',
+        'Germany',
+      ]);
+    });
+
+    it('serves no address when the description has no "Address:" block', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-noaddress', {
+            DESCRIPTION:
+              'Get up-to-date information at: https://luma.com/n5mzdtvb\\n\\nHosted by the OHF',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toBeUndefined();
+    });
+
+    it('only opens an address block on a line that is exactly "Address:"', async () => {
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-midaddress', {
+            DESCRIPTION:
+              'Send mail to this Address:\\nnot a venue\\n\\nPostal Address:\\nalso not a venue',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toBeUndefined();
     });
 
     it('omits coordinates when GEO is malformed', async () => {

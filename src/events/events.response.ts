@@ -96,6 +96,18 @@ export class EventInfoResponse implements EventInfo {
 
   @ApiProperty({
     description:
+      'The venue address as the description\'s "Address:" block lists it, ' +
+      'one line per array item. Absent when the description carries no such ' +
+      'block.',
+    example: ['AI Village', 'Hürth, Nordrhein-Westfalen', 'Germany'],
+    type: String,
+    isArray: true,
+    required: false,
+  })
+  address?: string[];
+
+  @ApiProperty({
+    description:
       'Venue latitude in decimal degrees, when the feed carries coordinates.',
     example: 53.336691,
     required: false,
