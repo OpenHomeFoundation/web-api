@@ -285,6 +285,7 @@ describe('Swagger (e2e)', () => {
 
     it('requires only the event fields that are always served', () => {
       expect([...(event.required ?? [])].sort()).toEqual([
+        'address',
         'id',
         'start',
         'summary',

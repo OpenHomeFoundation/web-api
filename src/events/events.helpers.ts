@@ -45,17 +45,19 @@ export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
  */
 const ADDRESS_PATTERN = /(?:^|\n)Address:\n([\s\S]*?)(?:\n\n|$)/;
 
+/** What Luma puts in the address block when the event has no venue set. */
+const ADDRESS_PLACEHOLDER = 'Check event page for more details.';
+
 /**
  * The description's address block as one array item per line, trimmed, with
- * blank lines dropped; undefined when the description carries no such block.
+ * blank lines dropped; empty when the description carries no such block, or
+ * the block only holds Luma's no-venue placeholder.
  */
-export const extractAddress = (description: string): string[] | undefined => {
-  const lines = ADDRESS_PATTERN.exec(description)?.[1]
+export const extractAddress = (description: string): string[] =>
+  ADDRESS_PATTERN.exec(description)?.[1]
     .split('\n')
     .map((line) => line.trim())
-    .filter(Boolean);
-  return lines?.length ? lines : undefined;
-};
+    .filter((line) => line && line !== ADDRESS_PLACEHOLDER) ?? [];
 
 export const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);

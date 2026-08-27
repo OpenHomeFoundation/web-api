@@ -97,14 +97,14 @@ export class EventInfoResponse implements EventInfo {
   @ApiProperty({
     description:
       'The venue address as the description\'s "Address:" block lists it, ' +
-      'one line per array item. Absent when the description carries no such ' +
-      'block.',
+      'one line per array item. Empty when the description carries no such ' +
+      'block, or the block only holds Luma\'s "Check event page for more ' +
+      'details." placeholder.',
     example: ['AI Village', 'Hürth, Nordrhein-Westfalen', 'Germany'],
     type: String,
     isArray: true,
-    required: false,
   })
-  address?: string[];
+  address!: string[];
 
   @ApiProperty({
     description:

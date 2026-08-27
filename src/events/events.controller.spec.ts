@@ -8,6 +8,7 @@ const event = (overrides: Partial<EventInfo> = {}): EventInfo => ({
   id: 'evt-abc@events.lu.ma',
   summary: 'Dublin - Hosted by the OHF',
   start: '2026-06-04T17:30:00.000Z',
+  address: [],
   ...overrides,
 });
 

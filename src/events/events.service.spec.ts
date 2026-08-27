@@ -388,7 +388,7 @@ describe('EventsService', () => {
       ]);
     });
 
-    it('serves no address when the description has no "Address:" block', async () => {
+    it('serves an empty address when the description has no "Address:" block', async () => {
       luma.serve(
         HA.calendarId,
         vcalendar('HA', [
@@ -400,7 +400,24 @@ describe('EventsService', () => {
       );
       const service = await start();
 
-      expect(service.getCalendar(HA.slug).events[0].address).toBeUndefined();
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([]);
+    });
+
+    it('serves an empty address for the "Check event page" placeholder', async () => {
+      // Luma fills the address block with this placeholder when the event has
+      // no venue set; that is the absence of an address, not an address.
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-placeholder', {
+            DESCRIPTION:
+              'Get up-to-date information at: https://luma.com/n5mzdtvb\\n\\nAddress:\\nCheck event page for more details.\\n\\nHosted by the OHF',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([]);
     });
 
     it('only opens an address block on a line that is exactly "Address:"', async () => {
@@ -415,7 +432,7 @@ describe('EventsService', () => {
       );
       const service = await start();
 
-      expect(service.getCalendar(HA.slug).events[0].address).toBeUndefined();
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([]);
     });
 
     it('omits coordinates when GEO is malformed', async () => {
