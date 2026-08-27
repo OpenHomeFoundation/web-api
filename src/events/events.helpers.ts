@@ -53,11 +53,16 @@ const ADDRESS_PLACEHOLDER = 'Check event page for more details.';
  * blank lines dropped; empty when the description carries no such block, or
  * the block only holds Luma's no-venue placeholder.
  */
-export const extractAddress = (description: string): string[] =>
-  ADDRESS_PATTERN.exec(description)?.[1]
+export const extractAddress = (description: string): string[] => {
+  const block = ADDRESS_PATTERN.exec(description)?.[1];
+  if (block === undefined) {
+    return [];
+  }
+  return block
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && line !== ADDRESS_PLACEHOLDER) ?? [];
+    .filter((line) => line && line !== ADDRESS_PLACEHOLDER);
+};
 
 export const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
