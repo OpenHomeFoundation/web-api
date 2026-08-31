@@ -1,7 +1,7 @@
 {
   "name": "web-api",
   "version": "0.4.0",
-  "packageManager": "pnpm@11.22.0",
+  "packageManager": "pnpm@11.23.0",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
