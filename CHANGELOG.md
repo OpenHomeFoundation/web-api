@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/OpenHomeFoundation/web-api/compare/v0.4.0...v0.4.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **docker:** build the app stages on the build platform ([#66](https://github.com/OpenHomeFoundation/web-api/issues/66)) ([fedba58](https://github.com/OpenHomeFoundation/web-api/commit/fedba58b079f31cf72ebf6e8db5f91af59b33d30))
+
 ## [0.4.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.3.0...v0.4.0) (2026-08-31)
 
 
