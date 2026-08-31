@@ -12,6 +12,7 @@ import { Calendar, EVENTS_CALENDARS } from './events.calendars';
 import {
   ContentLine,
   eventsEqual,
+  extractAddress,
   HOST_PATTERN,
   LUMA_LINK_PATTERN,
   parseContentLine,
@@ -49,6 +50,13 @@ export interface EventInfo {
   url?: string;
   /** Who is hosting, as the description's "Hosted by …" line names them. */
   host?: string;
+  /**
+   * The venue address as the description's "Address:" block lists it, one
+   * line per array item. Empty when the description carries no such block,
+   * or the block only holds Luma's "Check event page for more details."
+   * placeholder.
+   */
+  address: string[];
   /** Venue latitude in decimal degrees, when the feed carries coordinates. */
   latitude?: number;
   /** Venue longitude in decimal degrees, when the feed carries coordinates. */
@@ -286,6 +294,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
         text('URL') ??
         (description ? LUMA_LINK_PATTERN.exec(description)?.[0] : undefined),
       host: description ? HOST_PATTERN.exec(description)?.[1] : undefined,
+      address: extractAddress(description ?? ''),
       ...geo,
       status: (EVENT_STATUSES as readonly string[]).includes(status ?? '')
         ? (status as EventStatus)

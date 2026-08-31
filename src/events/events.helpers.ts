@@ -31,6 +31,77 @@ export const LUMA_LINK_PATTERN =
  */
 export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
 
+/**
+ * What opens the venue address block: a line that holds nothing but
+ * "Address:". Anchored to the line start so prose mentioning an address
+ * mid-line cannot open one, with the same trailing-whitespace slack
+ * HOST_PATTERN allows. Case-insensitive for the same reason the placeholder
+ * comparison is: a template that stops capitalising the heading would
+ * otherwise empty every address at once.
+ */
+const ADDRESS_HEADING = /^Address:\s*$/i;
+
+/**
+ * The templated "Hosted by …" line, which HOST_PATTERN reads separately and
+ * which is never part of the address. Descriptions that separate the two with
+ * a single newline carry no blank line to close the block on, so without this
+ * the host name would be served as the last line of the venue address.
+ */
+const HOST_LINE = /^Hosted by /;
+
+/** What Luma puts in the address block when the event has no venue set. */
+const ADDRESS_PLACEHOLDER = 'Check event page for more details.';
+
+/**
+ * Case and trailing punctuation dropped, so the placeholder is still
+ * recognised if Luma stops capitalising it or loses the full stop.
+ */
+const forCompare = (line: string): string =>
+  line.toLowerCase().replace(/[.\s]+$/, '');
+
+/** The placeholder in the form block lines are compared in. */
+const PLACEHOLDER_COMPARE = forCompare(ADDRESS_PLACEHOLDER);
+
+/**
+ * The venue address as the description's templated block lists it, one array
+ * item per line, trimmed:
+ *
+ *   Address:
+ *   AI Village
+ *   Hürth, Nordrhein-Westfalen
+ *   Germany
+ *
+ * The block opens on an ADDRESS_HEADING line and closes on the first blank
+ * line, the templated "Hosted by …" line, or the end of the text. Read line by
+ * line rather than with one pattern over the whole text: a lazy match can be
+ * closed by the very newline that opened the block, which turns an "Address:"
+ * line followed by a blank one into whatever paragraph comes next, and a
+ * "blank" line carrying a space closes no block at all.
+ *
+ * Empty when the description carries no such block, the block is empty, or the
+ * block holds nothing but the no-venue placeholder. That placeholder is
+ * compared against the whole block, so a line that merely looks like it is
+ * never dropped out of the middle of a real address.
+ */
+export const extractAddress = (description: string): string[] => {
+  const lines = description.split('\n');
+  const heading = lines.findIndex((line) => ADDRESS_HEADING.test(line));
+  if (heading === -1) {
+    return [];
+  }
+  const block: string[] = [];
+  for (const line of lines.slice(heading + 1)) {
+    const trimmed = line.trim();
+    if (trimmed === '' || HOST_LINE.test(trimmed)) {
+      break;
+    }
+    block.push(trimmed);
+  }
+  const onlyPlaceholder =
+    block.length === 1 && forCompare(block[0]) === PLACEHOLDER_COMPARE;
+  return onlyPlaceholder ? [] : block;
+};
+
 export const stackOf = (err: unknown): string =>
   err instanceof Error ? (err.stack ?? err.message) : String(err);
 
@@ -47,12 +118,40 @@ const EVENT_INFO_FIELDS: Record<keyof EventInfo, true> = {
   location: true,
   url: true,
   host: true,
+  address: true,
   latitude: true,
   longitude: true,
   status: true,
 };
 
 const EVENT_FIELDS = Object.keys(EVENT_INFO_FIELDS) as (keyof EventInfo)[];
+
+/** Every value an EventInfo field can hold, and the subset compared by ===. */
+type EventFieldValue = EventInfo[keyof EventInfo];
+type ScalarFieldValue = string | number | undefined;
+
+/**
+ * One field of two events compared by value: scalar fields by identity, array
+ * fields (address) element by element, since every refresh re-parses the feed
+ * into fresh arrays that must still count as unchanged.
+ *
+ * The `scalar` assignment is the compile-time guard. A field added to
+ * EventInfo whose type is neither scalar nor an array fails to assign here,
+ * which is the reminder that === would compare two freshly parsed objects by
+ * reference and move updatedAt on every refresh.
+ */
+const fieldEquals = (a: EventFieldValue, b: EventFieldValue): boolean => {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, index) => item === b[index])
+    );
+  }
+  const scalar: ScalarFieldValue = a;
+  return scalar === b;
+};
 
 /**
  * Field-by-field equality over two already-sorted event lists, so an unchanged
@@ -61,7 +160,7 @@ const EVENT_FIELDS = Object.keys(EVENT_INFO_FIELDS) as (keyof EventInfo)[];
 export const eventsEqual = (a: EventInfo[], b: EventInfo[]): boolean =>
   a.length === b.length &&
   a.every((event, index) =>
-    EVENT_FIELDS.every((field) => event[field] === b[index][field]),
+    EVENT_FIELDS.every((field) => fieldEquals(event[field], b[index][field])),
   );
 
 /**

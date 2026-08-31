@@ -101,9 +101,11 @@ const icsFor = (calendar: CalendarFixture): string =>
       `DTEND:${event.end}`,
       `UID:${event.uid}`,
       `SUMMARY:${event.summary}`,
-      // Folded mid-URL, the way Luma folds at 75 octets.
+      // Folded mid-URL the way Luma folds at 75 octets, then again
+      // mid-token, to prove unfolding runs before the description is read.
       `DESCRIPTION:Get up-to-date information at: ${event.lumaUrl.slice(0, 30)}`,
-      ` ${event.lumaUrl.slice(30)}\\n\\nHosted by the fixture`,
+      ` ${event.lumaUrl.slice(30)}\\n\\nAd`,
+      ` dress:\\n26 Wexford St\\nDublin\\nIreland\\n\\nHosted by the fixture`,
       'LOCATION:26 Wexford St\\, Dublin\\, Ireland',
       'GEO:53.336691;-6.26573',
       'STATUS:CONFIRMED',
@@ -271,10 +273,11 @@ describe('Events (e2e)', () => {
         summary: fixture.summary,
         start: isoOf(fixture.start),
         end: isoOf(fixture.end),
-        description: `Get up-to-date information at: ${fixture.lumaUrl}\n\nHosted by the fixture`,
+        description: `Get up-to-date information at: ${fixture.lumaUrl}\n\nAddress:\n26 Wexford St\nDublin\nIreland\n\nHosted by the fixture`,
         location: '26 Wexford St, Dublin, Ireland',
         url: fixture.lumaUrl,
         host: 'the fixture',
+        address: ['26 Wexford St', 'Dublin', 'Ireland'],
         latitude: 53.336691,
         longitude: -6.26573,
         status: 'confirmed',

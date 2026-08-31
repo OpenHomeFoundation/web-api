@@ -275,6 +275,7 @@ describe('Swagger (e2e)', () => {
           'location',
           'url',
           'host',
+          'address',
           'latitude',
           'longitude',
           'status',
@@ -282,8 +283,16 @@ describe('Swagger (e2e)', () => {
       );
     });
 
+    it('documents address as an array of strings', () => {
+      expect(event.properties?.address).toMatchObject({
+        type: 'array',
+        items: { type: 'string' },
+      });
+    });
+
     it('requires only the event fields that are always served', () => {
       expect([...(event.required ?? [])].sort()).toEqual([
+        'address',
         'id',
         'start',
         'summary',
