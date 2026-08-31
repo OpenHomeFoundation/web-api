@@ -33,8 +33,8 @@ export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
 
 /**
  * The venue address is also templated into the description, as a block opened
- * by a line that is exactly "Address:" and closed by the first blank line, the
- * templated "Hosted by …" line, or the end of the text:
+ * by a line that holds nothing but "Address:" and closed by the first blank
+ * line, the templated "Hosted by …" line, or the end of the text:
  *
  *   Address:
  *   AI Village
@@ -46,9 +46,11 @@ export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
  * an "Address:" line followed by a blank one into whatever paragraph comes
  * next, and a "blank" line carrying a space closes no block at all. Anchored
  * to the line start so prose mentioning an address mid-line cannot open one,
- * with the same trailing-whitespace slack HOST_PATTERN allows.
+ * with the same trailing-whitespace slack HOST_PATTERN allows. Case-insensitive
+ * for the same reason the placeholder comparison is: a template that stops
+ * capitalising the heading would otherwise empty every address at once.
  */
-const ADDRESS_HEADING = /^Address:\s*$/;
+const ADDRESS_HEADING = /^Address:\s*$/i;
 
 /**
  * The templated "Hosted by …" line, which HOST_PATTERN reads separately and

@@ -435,6 +435,25 @@ describe('EventsService', () => {
       expect(service.getCalendar(HA.slug).events[0].address).toEqual([]);
     });
 
+    it('opens an address block whatever case the heading is written in', async () => {
+      // Same reasoning as the placeholder comparison: Luma capitalises the
+      // heading today, and a template that stopped would empty every address.
+      luma.serve(
+        HA.calendarId,
+        vcalendar('HA', [
+          lumaEvent('evt-lowercase-heading', {
+            DESCRIPTION: 'address:\\nAI Village\\nGermany',
+          }),
+        ]),
+      );
+      const service = await start();
+
+      expect(service.getCalendar(HA.slug).events[0].address).toEqual([
+        'AI Village',
+        'Germany',
+      ]);
+    });
+
     it('serves an empty address when the block itself is empty', async () => {
       // A lazy whole-text match can be closed by the newline that opened the
       // block, which would promote the next paragraph to the address.
