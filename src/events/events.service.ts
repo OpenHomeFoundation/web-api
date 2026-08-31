@@ -294,7 +294,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
         text('URL') ??
         (description ? LUMA_LINK_PATTERN.exec(description)?.[0] : undefined),
       host: description ? HOST_PATTERN.exec(description)?.[1] : undefined,
-      address: description ? extractAddress(description) : [],
+      address: extractAddress(description ?? ''),
       ...geo,
       status: (EVENT_STATUSES as readonly string[]).includes(status ?? '')
         ? (status as EventStatus)

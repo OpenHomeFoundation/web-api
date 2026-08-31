@@ -101,7 +101,8 @@ const icsFor = (calendar: CalendarFixture): string =>
       `DTEND:${event.end}`,
       `UID:${event.uid}`,
       `SUMMARY:${event.summary}`,
-      // Folded mid-URL and mid-address, the way Luma folds at 75 octets.
+      // Folded mid-URL the way Luma folds at 75 octets, then again
+      // mid-token, to prove unfolding runs before the description is read.
       `DESCRIPTION:Get up-to-date information at: ${event.lumaUrl.slice(0, 30)}`,
       ` ${event.lumaUrl.slice(30)}\\n\\nAd`,
       ` dress:\\n26 Wexford St\\nDublin\\nIreland\\n\\nHosted by the fixture`,
