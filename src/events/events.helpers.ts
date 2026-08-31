@@ -32,23 +32,12 @@ export const LUMA_LINK_PATTERN =
 export const HOST_PATTERN = /(?:^|\n)Hosted by ([^\n]+?)\s*$/;
 
 /**
- * The venue address is also templated into the description, as a block opened
- * by a line that holds nothing but "Address:" and closed by the first blank
- * line, the templated "Hosted by …" line, or the end of the text:
- *
- *   Address:
- *   AI Village
- *   Hürth, Nordrhein-Westfalen
- *   Germany
- *
- * Read line by line rather than with one pattern over the whole text: a lazy
- * match can be closed by the very newline that opened the block, which turns
- * an "Address:" line followed by a blank one into whatever paragraph comes
- * next, and a "blank" line carrying a space closes no block at all. Anchored
- * to the line start so prose mentioning an address mid-line cannot open one,
- * with the same trailing-whitespace slack HOST_PATTERN allows. Case-insensitive
- * for the same reason the placeholder comparison is: a template that stops
- * capitalising the heading would otherwise empty every address at once.
+ * What opens the venue address block: a line that holds nothing but
+ * "Address:". Anchored to the line start so prose mentioning an address
+ * mid-line cannot open one, with the same trailing-whitespace slack
+ * HOST_PATTERN allows. Case-insensitive for the same reason the placeholder
+ * comparison is: a template that stops capitalising the heading would
+ * otherwise empty every address at once.
  */
 const ADDRESS_HEADING = /^Address:\s*$/i;
 
@@ -70,12 +59,29 @@ const ADDRESS_PLACEHOLDER = 'Check event page for more details.';
 const forCompare = (line: string): string =>
   line.toLowerCase().replace(/[.\s]+$/, '');
 
+/** The placeholder in the form block lines are compared in. */
+const PLACEHOLDER_COMPARE = forCompare(ADDRESS_PLACEHOLDER);
+
 /**
- * The description's address block as one array item per line, trimmed; empty
- * when the description carries no such block, the block is empty, or the block
- * holds nothing but Luma's no-venue placeholder. That placeholder is compared
- * against the whole block, so a line that merely looks like it is never
- * dropped out of the middle of a real address.
+ * The venue address as the description's templated block lists it, one array
+ * item per line, trimmed:
+ *
+ *   Address:
+ *   AI Village
+ *   Hürth, Nordrhein-Westfalen
+ *   Germany
+ *
+ * The block opens on an ADDRESS_HEADING line and closes on the first blank
+ * line, the templated "Hosted by …" line, or the end of the text. Read line by
+ * line rather than with one pattern over the whole text: a lazy match can be
+ * closed by the very newline that opened the block, which turns an "Address:"
+ * line followed by a blank one into whatever paragraph comes next, and a
+ * "blank" line carrying a space closes no block at all.
+ *
+ * Empty when the description carries no such block, the block is empty, or the
+ * block holds nothing but the no-venue placeholder. That placeholder is
+ * compared against the whole block, so a line that merely looks like it is
+ * never dropped out of the middle of a real address.
  */
 export const extractAddress = (description: string): string[] => {
   const lines = description.split('\n');
@@ -92,8 +98,7 @@ export const extractAddress = (description: string): string[] => {
     block.push(trimmed);
   }
   const onlyPlaceholder =
-    block.length === 1 &&
-    forCompare(block[0]) === forCompare(ADDRESS_PLACEHOLDER);
+    block.length === 1 && forCompare(block[0]) === PLACEHOLDER_COMPARE;
   return onlyPlaceholder ? [] : block;
 };
 
