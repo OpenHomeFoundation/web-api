@@ -269,3 +269,18 @@ The service ships as a container built by `Dockerfile` (multi-stage, running as 
 non-root user, with a `HEALTHCHECK` against `/__heartbeat__`). Pushes to `main`
 build and publish the image with a signed build-provenance attestation, and the
 release workflow rolls the new version out through Terraform Cloud.
+
+The image is published for `linux/amd64` and `linux/arm64`. Only the final stage
+is built for the target platform: the stages that compile the app and install
+its production dependencies are pinned to `$BUILDPLATFORM`, so a multi-platform
+build runs no emulated command at all. That holds because the compiled output
+and every production dependency are pure JavaScript, which makes what those
+stages produce identical on either architecture.
+
+**Adding a production dependency with native bindings breaks that assumption,
+and it breaks it silently** - the image would ship binaries built for the
+builder's architecture and fail only at runtime on the other one. Such a
+dependency has to be installed in a stage built for `$TARGETPLATFORM`, which
+means putting the emulation back for that stage. The same applies to an install
+whose scripts fetch architecture-specific binaries; production installs pass
+`--ignore-scripts` today.
