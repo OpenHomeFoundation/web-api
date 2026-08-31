@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.3.0...v0.4.0) (2026-08-31)
+
+
+### Features
+
+* add OHF Community Day calendar to events config ([#59](https://github.com/OpenHomeFoundation/web-api/issues/59)) ([df1fbc7](https://github.com/OpenHomeFoundation/web-api/commit/df1fbc709b785e8a81dd281bc3fe84767add57fb))
+* **events:** serve the venue address from event descriptions ([#62](https://github.com/OpenHomeFoundation/web-api/issues/62)) ([4ef2ab0](https://github.com/OpenHomeFoundation/web-api/commit/4ef2ab00b3ec9ec17d58544e3acf4d164ed06239))
+
 ## [0.3.0](https://github.com/OpenHomeFoundation/web-api/compare/v0.2.0...v0.3.0) (2026-08-24)
 
 
