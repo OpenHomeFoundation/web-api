@@ -22,5 +22,51 @@
       matchUpdateTypes: ['digest'],
       minimumReleaseAge: '1 day',
     },
+    {
+      // Lint/format tooling moves together and rarely needs individual
+      // scrutiny - one PR instead of one per package.
+      matchPackageNames: [
+        'eslint',
+        '@eslint/**',
+        'eslint-plugin-*',
+        '@typescript-eslint/**',
+        'typescript-eslint',
+        'globals',
+        'prettier',
+        'prettier-plugin-*',
+        'lint-staged',
+      ],
+      groupName: 'lint and format tooling',
+    },
+    {
+      matchPackageNames: ['@types/**'],
+      groupName: 'type definitions',
+    },
+    {
+      // pnpm itself and the action that installs it should move together.
+      matchPackageNames: ['pnpm', 'pnpm/action-setup'],
+      groupName: 'pnpm',
+    },
+    {
+      matchManagers: ['github-actions'],
+      groupName: 'github-actions',
+    },
+    {
+      // NestJS core + ecosystem packages must move together: bumping one
+      // without the others breaks peer-dependency resolution (and, for
+      // majors, the whole set typically ships a coordinated breaking
+      // change - e.g. NestJS v12's move to ESM output, which broke Jest
+      // across every repo that took @nestjs/cache-manager, @nestjs/schedule,
+      // or the nest monorepo group independently instead of together).
+      matchPackageNames: ['@nestjs/**', 'nestjs-pino', 'nestjs-slack-bolt'],
+      groupName: 'NestJS',
+    },
+    {
+      // Don't even open the PR for a NestJS major until someone's ready to
+      // also handle whatever migration it requires (e.g. Jest ESM config).
+      matchPackageNames: ['@nestjs/**', 'nestjs-pino', 'nestjs-slack-bolt'],
+      matchUpdateTypes: ['major'],
+      dependencyDashboardApproval: true,
+    },
   ],
 }
