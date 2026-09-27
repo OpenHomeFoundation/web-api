@@ -12,8 +12,14 @@
 # binary. Same reasoning as unrs-resolver: the binary comes from a prebuilt
 # optional dependency that esbuild resolves at runtime, so the check is not
 # needed for it to work — `likec4 validate` exercises exactly that path.
+# @parcel/watcher (transitive, via jest-haste-map) is a native filesystem
+# watcher used only by Jest's --watch mode, which CI doesn't use; its install
+# script builds/fetches its native binding from source, the same pattern as
+# fsevents or esbuild. Official MIT-licensed package from the Parcel bundler
+# project - allowed to build so plain `pnpm install` stops failing.
 allowBuilds:
   '@nestjs/core': false
+  '@parcel/watcher': true
   '@scarf/scarf': false
   esbuild: false
   unrs-resolver: false
