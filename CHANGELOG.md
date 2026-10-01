@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/OpenHomeFoundation/web-api/compare/v0.4.1...v0.4.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **deps:** approve @parcel/watcher build script ([#103](https://github.com/OpenHomeFoundation/web-api/issues/103)) ([293ccf9](https://github.com/OpenHomeFoundation/web-api/commit/293ccf988cd367483a12c9bda5133c4f5282414f))
+
 ## [0.4.1](https://github.com/OpenHomeFoundation/web-api/compare/v0.4.0...v0.4.1) (2026-08-31)
 
 
