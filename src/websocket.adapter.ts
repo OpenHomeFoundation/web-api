@@ -31,7 +31,7 @@ type AllowRequestCallback = (
  * scripted clients able to open connections freely — CORS is not a rate limit.
  */
 export class CorsIoAdapter extends IoAdapter {
-  private readonly logger = new Logger(CorsIoAdapter.name);
+  protected override readonly logger = new Logger(CorsIoAdapter.name);
   private readonly anyOrigin: boolean;
   private readonly matchers: readonly (string | RegExp)[];
 
