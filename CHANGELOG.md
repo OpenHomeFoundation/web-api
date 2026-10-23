@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/OpenHomeFoundation/web-api/compare/v0.4.1...v0.4.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** approve @parcel/watcher build script ([#103](https://github.com/OpenHomeFoundation/web-api/issues/103)) ([293ccf9](https://github.com/OpenHomeFoundation/web-api/commit/293ccf988cd367483a12c9bda5133c4f5282414f))
+* **deps:** update node.js to v24.22.1 digest 06d7adf (CVE-2026-105483, CVE-2026-106069) ([#123](https://github.com/OpenHomeFoundation/web-api/issues/123)) ([97b6350](https://github.com/OpenHomeFoundation/web-api/commit/97b635085138aae1a934dbefdf9b71235c7e8d49))
+
 ## [0.4.1](https://github.com/OpenHomeFoundation/web-api/compare/v0.4.0...v0.4.1) (2026-08-31)
 
 
