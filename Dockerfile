@@ -18,7 +18,7 @@
 # Adding a production dependency with native bindings breaks that assumption
 # silently — the image would ship the builder's architecture. Such a dependency
 # has to be installed on $TARGETPLATFORM instead, emulation and all.
-FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 WORKDIR /app
 RUN corepack enable
 # HUSKY=0 disables the `prepare` hook: git hooks are a developer-machine
@@ -39,7 +39,7 @@ RUN pnpm run build
 # installs git hooks for developers cannot run here — and an install whose
 # scripts may fetch architecture-specific binaries would defeat the
 # build-platform reasoning above.
-FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS deps
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS deps
 WORKDIR /app
 ENV HUSKY=0
 RUN corepack enable
@@ -50,7 +50,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # nothing: it copies what the stages above produced. That keeps QEMU out of the
 # multi-platform build entirely, and leaves neither pnpm nor its
 # content-addressable store in the image the way an install here would.
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runner
+FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
