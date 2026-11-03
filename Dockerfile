@@ -20,7 +20,8 @@
 # has to be installed on $TARGETPLATFORM instead, emulation and all.
 FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
 WORKDIR /app
-RUN corepack enable
+# Node 25+ images no longer bundle corepack, so install it from npm.
+RUN npm install -g corepack@0.36.0 && corepack enable
 # HUSKY=0 disables the `prepare` hook: git hooks are a developer-machine
 # concern, and .husky/ is not part of the build context.
 ENV HUSKY=0
@@ -42,7 +43,8 @@ RUN pnpm run build
 FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS deps
 WORKDIR /app
 ENV HUSKY=0
-RUN corepack enable
+# Node 25+ images no longer bundle corepack, so install it from npm.
+RUN npm install -g corepack@0.36.0 && corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
