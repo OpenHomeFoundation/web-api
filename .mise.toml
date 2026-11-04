@@ -6,7 +6,7 @@
 
 [tools]
 # Matches the Dockerfile (node:24-alpine) and CI's setup-node.
-node = "24"
+node = "26"
 # pnpm is deliberately not managed here: package.json's `packageManager` field
 # pins it and corepack provisions that exact version, so a second pin in mise
 # could disagree with the lockfile.
