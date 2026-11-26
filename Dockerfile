@@ -18,7 +18,7 @@
 # Adding a production dependency with native bindings breaks that assumption
 # silently — the image would ship the builder's architecture. Such a dependency
 # has to be installed on $TARGETPLATFORM instead, emulation and all.
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 WORKDIR /app
 # Node 25+ images no longer bundle corepack, so install it from npm.
 RUN npm install -g corepack@0.36.0 && corepack enable
@@ -40,7 +40,7 @@ RUN pnpm run build
 # installs git hooks for developers cannot run here — and an install whose
 # scripts may fetch architecture-specific binaries would defeat the
 # build-platform reasoning above.
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS deps
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS deps
 WORKDIR /app
 ENV HUSKY=0
 # Node 25+ images no longer bundle corepack, so install it from npm.
@@ -52,7 +52,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # nothing: it copies what the stages above produced. That keeps QEMU out of the
 # multi-platform build entirely, and leaves neither pnpm nor its
 # content-addressable store in the image the way an install here would.
-FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS runner
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
